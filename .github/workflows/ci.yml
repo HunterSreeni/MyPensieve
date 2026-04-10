@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22, 24]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx biome check src/ tests/
+
+      - name: Unit tests
+        run: npx vitest run tests/unit/
+
+      - name: Integration tests
+        run: npx vitest run tests/integration/
+
+      - name: E2E tests
+        run: npx vitest run tests/e2e/
+
+      - name: Full test suite (verify count)
+        run: |
+          OUTPUT=$(npx vitest run 2>&1)
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -q "304 passed" || (echo "FAIL: Expected 304 tests passing" && exit 1)
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify CLI entry point exists
+        run: test -f dist/cli/index.js
+
+      - name: Verify CLI runs
+        run: node dist/cli/index.js --version
+
+  security:
+    name: Security audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit
+        run: npm audit --omit=dev || true
+
+      - name: Check for hardcoded secrets
+        run: |
+          echo "Checking for hardcoded secrets in source..."
+          FOUND=$(grep -rn "sk-[a-zA-Z0-9]\{20,\}\|Bearer [a-zA-Z0-9]\{20,\}" src/ || true)
+          if [ -n "$FOUND" ]; then
+            echo "FAIL: Potential hardcoded secrets found:"
+            echo "$FOUND"
+            exit 1
+          fi
+          echo "OK: No hardcoded secrets found"
+
+      - name: Check for hardcoded models in source
+        run: |
+          echo "Checking for hardcoded model strings in source logic..."
+          FOUND=$(grep -rn '"ollama/\|"anthropic/\|"openrouter/' src/ | grep -v "// \|/\*\| \* " || true)
+          if [ -n "$FOUND" ]; then
+            echo "WARN: Possible hardcoded model strings (verify these are comments only):"
+            echo "$FOUND"
+          fi
+          echo "OK: Check complete"
+
+      - name: Verify config permissions logic
+        run: |
+          npx vitest run tests/unit/config.test.ts 2>&1 | grep -q "passed" || (echo "FAIL: Config permission tests failed" && exit 1)
+
+      - name: Verify gateway security
+        run: |
+          npx vitest run tests/unit/gateway-security.test.ts 2>&1 | grep -q "passed" || (echo "FAIL: Gateway security tests failed" && exit 1)
+
+      - name: Verify Telegram peer security
+        run: |
+          npx vitest run tests/unit/telegram.test.ts 2>&1 | grep -q "passed" || (echo "FAIL: Telegram security tests failed" && exit 1)
