@@ -25,41 +25,36 @@ Built on top of [Pi](https://github.com/nickthecook/pi-coding-agent) (`@mariozec
 ### Prerequisites
 
 - Node.js >= 20
-- npm >= 9
 
 ### Install
 
 ```bash
-git clone https://github.com/YourUsername/MyPensieve.git
-cd MyPensieve
-npm install
-npm run build
+npm install -g mypensieve
 ```
 
-### Run tests
+### Setup
 
 ```bash
-npm test
+mypensieve init
 ```
 
-304 tests across 26 suites - unit, integration, and e2e. All should pass in under 3 seconds.
+The wizard walks you through 9 steps: operator profile, model selection, per-agent model assignment, channel setup, and persona seeding.
 
 ### Start a session
 
 ```bash
-# Build first
-npm run build
-
-# Run the CLI
-node dist/cli/index.js start
-
-# Other commands
-node dist/cli/index.js doctor    # healthcheck
-node dist/cli/index.js errors    # view error log
-node dist/cli/index.js --help    # all commands
+mypensieve start
 ```
 
-> Full Pi interactive mode integration requires the Pi re-audit (see [docs/architecture/PI-REAUDIT-CHECKLIST.md](docs/architecture/PI-REAUDIT-CHECKLIST.md)). The framework, memory, gateway, skills, and tests are complete.
+### Other commands
+
+```bash
+mypensieve doctor       # healthcheck
+mypensieve errors       # view error log
+mypensieve log          # daily journal
+mypensieve deliberate   # council mode
+mypensieve --help       # all commands
+```
 
 ---
 
