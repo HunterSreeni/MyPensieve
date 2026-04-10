@@ -1,8 +1,12 @@
 # MyPensieve
 
+[![npm version](https://img.shields.io/npm/v/mypensieve)](https://www.npmjs.com/package/mypensieve)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://img.shields.io/badge/tests-304%20passing-brightgreen)]()
+
 A general-purpose, self-evolving autonomous agent OS with persistent memory across sessions.
 
-Built on top of [Pi](https://github.com/nickthecook/pi-coding-agent) (`@mariozechner/pi-coding-agent`) by [Mario Zechner](https://github.com/nickthecook).
+Built on top of [Pi](https://github.com/badlogic/pi-mono) (`@mariozechner/pi-coding-agent`) by [Mario Zechner](https://github.com/badlogic).
 
 > The name is a Harry Potter reference - the Pensieve is a magical basin where you store extracted memories and revisit them later. That is exactly what this OS does.
 
@@ -17,6 +21,7 @@ Built on top of [Pi](https://github.com/nickthecook/pi-coding-agent) (`@mariozec
 - **Per-agent model assignment** - assign any LLM from any provider to any agent. Mix Ollama, OpenRouter, Anthropic, or anything else freely.
 - **Daily journal** - structured EOD ritual that captures wins, blockers, mood, energy. Queryable trends over time.
 - **9 skills + 6 MCPs** - blog-seo, CVE monitoring, image/video/audio editing, web research, browser automation, and more.
+- **Zero OAuth in MVP** - all bundled MCPs are free and keyless. No API keys needed to get started.
 
 ---
 
@@ -31,6 +36,7 @@ Built on top of [Pi](https://github.com/nickthecook/pi-coding-agent) (`@mariozec
 ```bash
 npm install -g mypensieve
 ```
+
 
 ### Setup
 
@@ -280,9 +286,10 @@ src/
   projects/       Project loader
 
 tests/
-  unit/           19 suites, 220 tests
-  integration/    6 suites, 51 tests (cross-phase)
-  e2e/            1 suite, 19 tests (full product scenarios)
+  unit/           20 suites
+  integration/    5 suites (cross-phase)
+  e2e/            1 suite (full product scenarios)
+  304 tests total, all passing
 
 docs/
   architecture/   Locked architecture decisions + implementation plan
@@ -313,7 +320,7 @@ MyPensieve borrows selectively from many sources. Credit where it's due:
 
 | Project | What we learned | Link |
 |---------|----------------|------|
-| **Pi** (`@mariozechner/pi-coding-agent`) | The runtime foundation. Agent loop, providers, sessions, skills, extensions. MyPensieve is built on Pi. | [github.com/nickthecook/pi-coding-agent](https://github.com/nickthecook/pi-coding-agent) |
+| **Pi** (`@mariozechner/pi-coding-agent`) | The runtime foundation. Agent loop, providers, sessions, skills, extensions. MyPensieve is built on Pi. | [github.com/badlogic/pi-mono](https://github.com/badlogic/pi-mono) |
 | **mempalace** | Bitemporal triple-store schema, layered memory loader, source-lineage on records | [github.com/milla-jovovich/mempalace](https://github.com/milla-jovovich/mempalace) |
 | **open-claw** | Per-peer channel session scope, decoupled embedding model idea | [github.com/nicholasgriffintn/open-claw](https://github.com/nicholasgriffintn/open-claw) |
 | **AutoGen** | Council architecture - GroupChat, speaker selection, max_round | [github.com/microsoft/autogen](https://github.com/microsoft/autogen) |
@@ -324,7 +331,7 @@ MyPensieve borrows selectively from many sources. Credit where it's due:
 
 ### Special thanks
 
-- **Mario Zechner** ([@nickthecook](https://github.com/nickthecook)) for Pi - the foundation that made MyPensieve possible in a single day of implementation
+- **Mario Zechner** ([@badlogic](https://github.com/badlogic)) for Pi - the foundation that made MyPensieve possible in a single day of implementation
 - The **Cognition** team for the hard-won lesson that multi-agent fragments context
 
 ---
@@ -334,7 +341,7 @@ MyPensieve borrows selectively from many sources. Credit where it's due:
 MyPensieve is currently in **closed development** through v2. No external contributions are accepted at this time.
 
 If you find a bug or have a feature suggestion:
-- Open an issue on the [Issues page](https://github.com/YourUsername/MyPensieve/issues)
+- Open an issue on the [Issues page](https://github.com/HunterSreeni/MyPensieve/issues)
 - Include steps to reproduce, expected behavior, and actual behavior
 - For feature requests, explain the use case
 
@@ -346,7 +353,7 @@ Contributions will open after v2 ships. Watch the repo for updates.
 
 ### v0.1.0 (current)
 - 10-phase MVP framework complete
-- 304 tests passing
+- 26 test suites, 304 tests passing
 - Pending: Pi re-audit (April 13, 2026) for full interactive mode
 
 ### v1.0.0 (planned)

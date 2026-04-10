@@ -89,8 +89,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: npm audit
-        run: npm audit --omit=dev || true
+      - name: npm audit (fail on high+)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Snyk security scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+      - name: Verify pinned dependencies (no ^ or ~ in production deps)
+        run: |
+          echo "Checking for unpinned production dependencies..."
+          UNPINNED=$(node -e "const p=require('./package.json'); for(const [k,v] of Object.entries(p.dependencies)){if(v.startsWith('^')||v.startsWith('~'))console.log(k+' '+v)}")
+          if [ -n "$UNPINNED" ]; then
+            echo "FAIL: Production dependencies must be pinned to exact versions:"
+            echo "$UNPINNED"
+            exit 1
+          fi
+          echo "OK: All production dependencies are pinned"
 
       - name: Check for hardcoded secrets
         run: |
