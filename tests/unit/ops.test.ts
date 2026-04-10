@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { logCost, readDailyCost } from "../../src/ops/cost.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { pruneBackups } from "../../src/ops/backup/engine.js";
+import { logCost, readDailyCost } from "../../src/ops/cost.js";
 
 describe("Cost tracking", () => {
 	let tmpDir: string;

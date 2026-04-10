@@ -1,9 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
-import { GatewayDispatcher, GatewayDispatchError } from "../../src/gateway/dispatcher.js";
+import { describe, expect, it, vi } from "vitest";
+import { GatewayDispatchError, GatewayDispatcher } from "../../src/gateway/dispatcher.js";
 import { DEFAULT_ROUTING_TABLES } from "../../src/gateway/routing-loader.js";
+import type { RoutingTable } from "../../src/gateway/routing-schema.js";
 import type { VerbName } from "../../src/gateway/verbs.js";
 import { VERB_NAMES } from "../../src/gateway/verbs.js";
-import type { RoutingTable } from "../../src/gateway/routing-schema.js";
 
 function makeRoutingTables(): Map<VerbName, RoutingTable> {
 	const tables = new Map<VerbName, RoutingTable>();
@@ -24,7 +24,11 @@ describe("GatewayDispatcher", () => {
 		expect(result.verb).toBe("recall");
 		expect(result.target).toBe("memory-recall");
 		expect(result.targetType).toBe("skill");
-		expect(mockExecutor).toHaveBeenCalledWith("memory-recall", "skill", expect.objectContaining({ query: "test query" }));
+		expect(mockExecutor).toHaveBeenCalledWith(
+			"memory-recall",
+			"skill",
+			expect.objectContaining({ query: "test query" }),
+		);
 	});
 
 	it("dispatches research verb to researcher skill", async () => {
@@ -59,11 +63,7 @@ describe("GatewayDispatcher", () => {
 
 	it("dispatches produce with kind=image to image-edit", async () => {
 		const dispatcher = new GatewayDispatcher(makeRoutingTables(), mockExecutor);
-		const result = await dispatcher.dispatch(
-			"produce",
-			{ kind: "image", prompt: "a sunset" },
-			ctx,
-		);
+		const result = await dispatcher.dispatch("produce", { kind: "image", prompt: "a sunset" }, ctx);
 
 		expect(result.target).toBe("image-edit");
 	});
@@ -93,9 +93,9 @@ describe("GatewayDispatcher", () => {
 		});
 		const dispatcher = new GatewayDispatcher(makeRoutingTables(), failingExecutor);
 
-		await expect(
-			dispatcher.dispatch("recall", { query: "test" }, ctx),
-		).rejects.toThrow("Execution failed");
+		await expect(dispatcher.dispatch("recall", { query: "test" }, ctx)).rejects.toThrow(
+			"Execution failed",
+		);
 	});
 
 	it("validates research args (requires topic)", async () => {

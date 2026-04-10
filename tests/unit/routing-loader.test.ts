@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import YAML from "yaml";
 import {
-	loadRoutingTable,
-	loadAllRoutingTables,
 	DEFAULT_ROUTING_TABLES,
 	RoutingLoadError,
+	loadAllRoutingTables,
+	loadRoutingTable,
 } from "../../src/gateway/routing-loader.js";
 import { VERB_NAMES } from "../../src/gateway/verbs.js";
 

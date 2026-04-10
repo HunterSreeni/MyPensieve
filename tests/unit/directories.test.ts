@@ -1,7 +1,7 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // We need to mock the paths before importing the module
 const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "mypensieve-dirs-test-"));
@@ -39,9 +39,7 @@ vi.mock("../../src/config/paths.js", () => {
 	};
 });
 
-const { scaffoldDirectories, verifyDirectories } = await import(
-	"../../src/init/directories.js"
-);
+const { scaffoldDirectories, verifyDirectories } = await import("../../src/init/directories.js");
 
 describe("Directory scaffold", () => {
 	afterEach(() => {

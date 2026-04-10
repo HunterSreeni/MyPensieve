@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 /**
  * Cross-phase integration: Phase 1-5
  * The complete pipeline: Config -> Project -> Gateway -> Skills -> Memory -> Recall
@@ -9,21 +12,18 @@
  * 4. Gateway dispatcher routes verbs to skills
  * 5. Skills write to memory, memory is queryable via recall
  */
-import { describe, it, expect, afterEach } from "vitest";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { writeConfig, readConfig } from "../../src/config/index.js";
+import { readConfig, writeConfig } from "../../src/config/index.js";
 import type { Config } from "../../src/config/schema.js";
-import { validateChannelBinding } from "../../src/gateway/binding-validator.js";
 import { getProjectBinding } from "../../src/core/session.js";
-import { loadProject, closeProject } from "../../src/projects/loader.js";
-import { loadAllRoutingTables } from "../../src/gateway/routing-loader.js";
+import { validateChannelBinding } from "../../src/gateway/binding-validator.js";
 import { GatewayDispatcher } from "../../src/gateway/dispatcher.js";
-import { createDefaultRegistry } from "../../src/skills/registry.js";
-import { createUnifiedExecutor, type SkillContext } from "../../src/skills/executor.js";
+import { loadAllRoutingTables } from "../../src/gateway/routing-loader.js";
 import { VERB_NAMES } from "../../src/gateway/verbs.js";
+import { closeProject, loadProject } from "../../src/projects/loader.js";
+import { type SkillContext, createUnifiedExecutor } from "../../src/skills/executor.js";
+import { createDefaultRegistry } from "../../src/skills/registry.js";
 
 function validConfig(): Config {
 	return {
@@ -31,9 +31,23 @@ function validConfig(): Config {
 		operator: { name: "Sreeni", timezone: "Asia/Kolkata" },
 		tier_routing: { default: "ollama/llama3" },
 		embeddings: { enabled: false },
-		daily_log: { enabled: true, cron: "0 20 * * *", channel: "cli", auto_prompt_next_morning_if_missed: true },
-		backup: { enabled: true, cron: "30 2 * * *", retention_days: 30, destinations: [{ type: "local", path: "/tmp" }], include_secrets: false },
-		channels: { cli: { enabled: true, tool_escape_hatch: false }, telegram: { enabled: false, tool_escape_hatch: false } },
+		daily_log: {
+			enabled: true,
+			cron: "0 20 * * *",
+			channel: "cli",
+			auto_prompt_next_morning_if_missed: true,
+		},
+		backup: {
+			enabled: true,
+			cron: "30 2 * * *",
+			retention_days: 30,
+			destinations: [{ type: "local", path: "/tmp" }],
+			include_secrets: false,
+		},
+		channels: {
+			cli: { enabled: true, tool_escape_hatch: false },
+			telegram: { enabled: false, tool_escape_hatch: false },
+		},
 		extractor: { cron: "0 2 * * *" },
 	};
 }
@@ -83,8 +97,11 @@ describe("Phase 1-5: Full pipeline", () => {
 		const { dispatcher, project } = setup();
 
 		project.decisions.addDecision({
-			sessionId: "s1", project: "test",
-			content: "Use Pi as foundation", confidence: 0.95, source: "manual",
+			sessionId: "s1",
+			project: "test",
+			content: "Use Pi as foundation",
+			confidence: 0.95,
+			source: "manual",
 		});
 
 		const result = await dispatcher.dispatch(
@@ -155,7 +172,7 @@ describe("Phase 1-5: Full pipeline", () => {
 	it("produce verb -> blog-seo skill -> returns SEO score", async () => {
 		const { dispatcher, project } = setup();
 
-		const longPost = "This is a detailed blog post about building autonomous agents with persistent memory. ".repeat(25) + "What would you build with persistent memory?";
+		const longPost = `${"This is a detailed blog post about building autonomous agents with persistent memory. ".repeat(25)}What would you build with persistent memory?`;
 
 		const result = await dispatcher.dispatch(
 			"produce",
@@ -208,17 +225,19 @@ describe("Phase 1-5: Full pipeline", () => {
 			ingest: { source: "/tmp/nonexistent.pdf" },
 			monitor: { target: "cves" },
 			journal: { action: "read" },
-			produce: { kind: "blog-post", prompt: "test post content here with enough words to be meaningful" },
+			produce: {
+				kind: "blog-post",
+				prompt: "test post content here with enough words to be meaningful",
+			},
 			dispatch: { action: "git.status" },
 			notify: { message: "test" },
 		};
 
 		for (const verb of VERB_NAMES) {
-			const result = await dispatcher.dispatch(
-				verb,
-				verbArgs[verb]!,
-				{ channelType: "cli", project: "test" },
-			);
+			const result = await dispatcher.dispatch(verb, verbArgs[verb]!, {
+				channelType: "cli",
+				project: "test",
+			});
 			expect(result.verb).toBe(verb);
 		}
 
@@ -230,23 +249,32 @@ describe("Phase 1-5: Full pipeline", () => {
 
 		// Step 1: Add decisions (simulating extractor)
 		project.decisions.addDecision({
-			sessionId: "session-001", project: "cli/test",
+			sessionId: "session-001",
+			project: "cli/test",
 			content: "Use 10-phase implementation plan because it allows parallel work",
-			confidence: 0.95, source: "manual", tags: ["planning"],
+			confidence: 0.95,
+			source: "manual",
+			tags: ["planning"],
 		});
 
 		// Step 2: Write journal entry via verb
-		await dispatcher.dispatch("journal", {
-			action: "write",
-			entry: {
-				wins: ["locked architecture decisions", "started implementation"],
-				blockers: ["waiting for Pi re-audit"],
-				mood_score: 4, mood_text: "productive day",
-				energy_score: 3, energy_text: "slightly tired",
-				remember_tomorrow: "run pi-reaudit.sh on April 13",
-				weekly_review_flag: false,
+		await dispatcher.dispatch(
+			"journal",
+			{
+				action: "write",
+				entry: {
+					wins: ["locked architecture decisions", "started implementation"],
+					blockers: ["waiting for Pi re-audit"],
+					mood_score: 4,
+					mood_text: "productive day",
+					energy_score: 3,
+					energy_text: "slightly tired",
+					remember_tomorrow: "run pi-reaudit.sh on April 13",
+					weekly_review_flag: false,
+				},
 			},
-		}, { channelType: "cli", project: "cli/test" });
+			{ channelType: "cli", project: "cli/test" },
+		);
 
 		// Step 3: Recall the decision
 		const recallResult = await dispatcher.dispatch(
@@ -288,7 +316,8 @@ describe("Phase 1-5: Full pipeline", () => {
 		config.channels.telegram.enabled = true;
 
 		const ctx: SkillContext = {
-			project, config,
+			project,
+			config,
 			channelType: "telegram",
 			sessionId: "test",
 		};

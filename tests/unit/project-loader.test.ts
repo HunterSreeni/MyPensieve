@@ -1,8 +1,8 @@
-import { describe, it, expect, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { loadProject, closeProject, listProjects } from "../../src/projects/loader.js";
+import { afterEach, describe, expect, it } from "vitest";
+import { closeProject, listProjects, loadProject } from "../../src/projects/loader.js";
 
 describe("Project loader", () => {
 	const tmpDirs: string[] = [];
@@ -49,8 +49,11 @@ describe("Project loader", () => {
 
 		// Add a decision
 		p1.decisions.addDecision({
-			sessionId: "s1", project: "test",
-			content: "test decision", confidence: 0.9, source: "manual",
+			sessionId: "s1",
+			project: "test",
+			content: "test decision",
+			confidence: 0.9,
+			source: "manual",
 		});
 		closeProject(p1);
 
@@ -68,12 +71,21 @@ describe("Project loader", () => {
 		const project = loadProject("cli/test", projectsDir);
 
 		project.decisions.addDecision({
-			sessionId: "s1", project: "test",
-			content: "Use TypeScript for everything", confidence: 0.95, source: "manual",
+			sessionId: "s1",
+			project: "test",
+			content: "Use TypeScript for everything",
+			confidence: 0.95,
+			source: "manual",
 		});
 		project.threads.createThread({
-			project: "test", title: "TypeScript vs Go debate",
-			firstMessage: { timestamp: "2026-04-10T12:00:00Z", session_id: "s1", role: "operator", content: "discuss" },
+			project: "test",
+			title: "TypeScript vs Go debate",
+			firstMessage: {
+				timestamp: "2026-04-10T12:00:00Z",
+				session_id: "s1",
+				role: "operator",
+				content: "discuss",
+			},
 		});
 
 		const results = project.memoryQuery.recall({ query: "TypeScript" });

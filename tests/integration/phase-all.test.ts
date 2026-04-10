@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 /**
  * Phase 10: Full MVP integration test.
  *
@@ -7,28 +10,25 @@
  *
  * This is the "can we ship?" test.
  */
-import { describe, it, expect, afterEach } from "vitest";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { writeConfig, readConfig, type Config } from "../../src/config/index.js";
-import { scaffoldDirectories, verifyDirectories } from "../../src/init/directories.js";
-import { validateChannelBinding } from "../../src/gateway/binding-validator.js";
-import { getProjectBinding } from "../../src/core/session.js";
-import { loadProject, closeProject, listProjects } from "../../src/projects/loader.js";
-import { loadAllRoutingTables } from "../../src/gateway/routing-loader.js";
-import { GatewayDispatcher } from "../../src/gateway/dispatcher.js";
-import { createDefaultRegistry } from "../../src/skills/registry.js";
-import { createUnifiedExecutor, type SkillContext } from "../../src/skills/executor.js";
-import { VERB_NAMES } from "../../src/gateway/verbs.js";
-import { CouncilManager, type AgentPersona } from "../../src/council/manager.js";
-import { PeerSessionManager } from "../../src/channels/telegram/sessions.js";
-import { ErrorDedup } from "../../src/ops/errors/dedup.js";
-import { CircuitBreakerRegistry } from "../../src/ops/errors/circuit-breaker.js";
-import { pruneBackups } from "../../src/ops/backup/engine.js";
 import { chunkMessage } from "../../src/channels/telegram/formatter.js";
+import { PeerSessionManager } from "../../src/channels/telegram/sessions.js";
+import { type Config, readConfig, writeConfig } from "../../src/config/index.js";
+import { getProjectBinding } from "../../src/core/session.js";
+import { type AgentPersona, CouncilManager } from "../../src/council/manager.js";
+import { validateChannelBinding } from "../../src/gateway/binding-validator.js";
+import { GatewayDispatcher } from "../../src/gateway/dispatcher.js";
+import { loadAllRoutingTables } from "../../src/gateway/routing-loader.js";
+import { VERB_NAMES } from "../../src/gateway/verbs.js";
+import { scaffoldDirectories, verifyDirectories } from "../../src/init/directories.js";
 import { CheckpointManager } from "../../src/memory/checkpoint.js";
+import { pruneBackups } from "../../src/ops/backup/engine.js";
+import { CircuitBreakerRegistry } from "../../src/ops/errors/circuit-breaker.js";
+import { ErrorDedup } from "../../src/ops/errors/dedup.js";
+import { closeProject, listProjects, loadProject } from "../../src/projects/loader.js";
+import { type SkillContext, createUnifiedExecutor } from "../../src/skills/executor.js";
+import { createDefaultRegistry } from "../../src/skills/registry.js";
 
 function validConfig(): Config {
 	return {
@@ -36,11 +36,27 @@ function validConfig(): Config {
 		operator: { name: "Sreeni", timezone: "Asia/Kolkata" },
 		tier_routing: { default: "ollama/llama3" },
 		embeddings: { enabled: false },
-		daily_log: { enabled: true, cron: "0 20 * * *", channel: "cli", auto_prompt_next_morning_if_missed: true },
-		backup: { enabled: true, cron: "30 2 * * *", retention_days: 30, destinations: [{ type: "local", path: "/tmp/mypensieve-backups" }], include_secrets: false },
+		daily_log: {
+			enabled: true,
+			cron: "0 20 * * *",
+			channel: "cli",
+			auto_prompt_next_morning_if_missed: true,
+		},
+		backup: {
+			enabled: true,
+			cron: "30 2 * * *",
+			retention_days: 30,
+			destinations: [{ type: "local", path: "/tmp/mypensieve-backups" }],
+			include_secrets: false,
+		},
 		channels: {
 			cli: { enabled: true, tool_escape_hatch: false },
-			telegram: { enabled: true, tool_escape_hatch: false, allowed_peers: ["peer-456"], allow_groups: false },
+			telegram: {
+				enabled: true,
+				tool_escape_hatch: false,
+				allowed_peers: ["peer-456"],
+				allow_groups: false,
+			},
 		},
 		extractor: { cron: "0 2 * * *" },
 	};
@@ -59,7 +75,10 @@ function setupFullStack(tmpDir: string) {
 	const project = loadProject(binding, projectsDir);
 	const registry = createDefaultRegistry();
 	const ctx: SkillContext = {
-		project, config, channelType: "cli", sessionId: `session-${Date.now()}`,
+		project,
+		config,
+		channelType: "cli",
+		sessionId: `session-${Date.now()}`,
 	};
 	const executor = createUnifiedExecutor(registry, ctx);
 	const tables = loadAllRoutingTables(metaSkillsDir);
@@ -85,34 +104,50 @@ describe("Phase 10: Full MVP Integration", () => {
 
 		// 1. Add decisions
 		project.decisions.addDecision({
-			sessionId: "s1", project: project.binding,
+			sessionId: "s1",
+			project: project.binding,
 			content: "Use Pi as foundation because it covers 70% of our needs",
-			confidence: 0.95, source: "manual", tags: ["architecture"],
+			confidence: 0.95,
+			source: "manual",
+			tags: ["architecture"],
 		});
 		project.decisions.addDecision({
-			sessionId: "s1", project: project.binding,
+			sessionId: "s1",
+			project: project.binding,
 			content: "Ship CLI + Telegram in MVP, defer Discord",
-			confidence: 0.95, source: "manual", tags: ["scope"],
+			confidence: 0.95,
+			source: "manual",
+			tags: ["scope"],
 		});
 
 		// 2. Journal entry via verb
-		const journalResult = await dispatcher.dispatch("journal", {
-			action: "write",
-			entry: {
-				wins: ["locked all architecture decisions", "built 10-phase plan"],
-				blockers: ["waiting for Pi re-audit on April 13"],
-				mood_score: 5, mood_text: "on fire",
-				energy_score: 4, energy_text: "strong",
-				remember_tomorrow: "run pi-reaudit.sh",
-				weekly_review_flag: false,
+		const journalResult = await dispatcher.dispatch(
+			"journal",
+			{
+				action: "write",
+				entry: {
+					wins: ["locked all architecture decisions", "built 10-phase plan"],
+					blockers: ["waiting for Pi re-audit on April 13"],
+					mood_score: 5,
+					mood_text: "on fire",
+					energy_score: 4,
+					energy_text: "strong",
+					remember_tomorrow: "run pi-reaudit.sh",
+					weekly_review_flag: false,
+				},
 			},
-		}, { channelType: "cli", project: project.binding });
+			{ channelType: "cli", project: project.binding },
+		);
 		expect((journalResult.result as { stored: boolean }).stored).toBe(true);
 
 		// 3. Research via verb
-		const researchResult = await dispatcher.dispatch("research", {
-			topic: "autonomous agent memory architectures",
-		}, { channelType: "cli", project: project.binding });
+		const researchResult = await dispatcher.dispatch(
+			"research",
+			{
+				topic: "autonomous agent memory architectures",
+			},
+			{ channelType: "cli", project: project.binding },
+		);
 		const research = researchResult.result as { synthesis: string; citations: unknown[] };
 		expect(research.synthesis.length).toBeGreaterThan(0);
 
@@ -120,9 +155,27 @@ describe("Phase 10: Full MVP Integration", () => {
 		const council = new CouncilManager({
 			topic: "Should we use SQLite or Redis for the memory index?",
 			agents: [
-				{ name: "researcher", description: "Gathers data", model: "openrouter/minimax-m2.7", canBeConvened: true, systemPrompt: "Research" },
-				{ name: "critic", description: "Challenges", model: "openrouter/kimi-k2", canBeConvened: true, systemPrompt: "Critique" },
-				{ name: "orchestrator", description: "Synthesizes", model: "anthropic/claude-sonnet-4-6", canBeConvened: true, systemPrompt: "Synthesize" },
+				{
+					name: "researcher",
+					description: "Gathers data",
+					model: "openrouter/minimax-m2.7",
+					canBeConvened: true,
+					systemPrompt: "Research",
+				},
+				{
+					name: "critic",
+					description: "Challenges",
+					model: "openrouter/kimi-k2",
+					canBeConvened: true,
+					systemPrompt: "Critique",
+				},
+				{
+					name: "orchestrator",
+					description: "Synthesizes",
+					model: "anthropic/claude-sonnet-4-6",
+					canBeConvened: true,
+					systemPrompt: "Synthesize",
+				},
 			],
 			speakerMode: "round_robin",
 			maxRounds: 9,
@@ -132,9 +185,13 @@ describe("Phase 10: Full MVP Integration", () => {
 		expect(councilResult.agents).toHaveLength(3);
 
 		// 5. Recall decisions (search by content that exists)
-		const recallResult = await dispatcher.dispatch("recall", {
-			query: "foundation",
-		}, { channelType: "cli", project: project.binding });
+		const recallResult = await dispatcher.dispatch(
+			"recall",
+			{
+				query: "foundation",
+			},
+			{ channelType: "cli", project: project.binding },
+		);
 		const matches = (recallResult.result as { matches: Array<{ content: string }> }).matches;
 		expect(matches.length).toBeGreaterThan(0);
 
@@ -153,8 +210,11 @@ describe("Phase 10: Full MVP Integration", () => {
 		// CLI session
 		const cliProject = loadProject("cli/project-a", projectsDir);
 		cliProject.decisions.addDecision({
-			sessionId: "s1", project: "cli/project-a",
-			content: "CLI secret decision about auth", confidence: 0.95, source: "manual",
+			sessionId: "s1",
+			project: "cli/project-a",
+			content: "CLI secret decision about auth",
+			confidence: 0.95,
+			source: "manual",
 		});
 
 		// Telegram session
@@ -162,16 +222,25 @@ describe("Phase 10: Full MVP Integration", () => {
 		const telegramManager = new PeerSessionManager(config, { projectsDir, timeoutMs: 30000 });
 		const telegramSession = telegramManager.getOrCreate("peer-456");
 		telegramSession.project.decisions.addDecision({
-			sessionId: "s2", project: telegramSession.binding,
-			content: "Telegram public decision", confidence: 0.95, source: "manual",
+			sessionId: "s2",
+			project: telegramSession.binding,
+			content: "Telegram public decision",
+			confidence: 0.95,
+			source: "manual",
 		});
 
 		// CLI recall should not see Telegram data
-		const cliRecall = cliProject.memoryQuery.recall({ query: "decision", project: "cli/project-a" });
+		const cliRecall = cliProject.memoryQuery.recall({
+			query: "decision",
+			project: "cli/project-a",
+		});
 		expect(cliRecall.every((m) => !m.content.includes("Telegram"))).toBe(true);
 
 		// Telegram recall should not see CLI data
-		const telegramRecall = telegramSession.project.memoryQuery.recall({ query: "decision", project: telegramSession.binding });
+		const telegramRecall = telegramSession.project.memoryQuery.recall({
+			query: "decision",
+			project: telegramSession.binding,
+		});
 		expect(telegramRecall.every((m) => !m.content.includes("CLI secret"))).toBe(true);
 
 		closeProject(cliProject);
@@ -194,7 +263,8 @@ describe("Phase 10: Full MVP Integration", () => {
 
 		for (const verb of VERB_NAMES) {
 			const result = await dispatcher.dispatch(verb, verbArgs[verb]!, {
-				channelType: "cli", project: project.binding,
+				channelType: "cli",
+				project: project.binding,
 			});
 			expect(result.verb).toBe(verb);
 			expect(result.target).toBeDefined();
@@ -211,9 +281,15 @@ describe("Phase 10: Full MVP Integration", () => {
 		// Simulate 5 rapid failures
 		for (let i = 0; i < 5; i++) {
 			const { shouldSurface } = dedup.record({
-				id: `err-${i}`, timestamp: new Date().toISOString(),
-				severity: "high", error_type: "mcp_crash", error_src: "test-mcp",
-				message: "Connection refused", context: {}, resolved: false, retry_count: 0,
+				id: `err-${i}`,
+				timestamp: new Date().toISOString(),
+				severity: "high",
+				error_type: "mcp_crash",
+				error_src: "test-mcp",
+				message: "Connection refused",
+				context: {},
+				resolved: false,
+				retry_count: 0,
 			});
 
 			breaker.recordFailure();
@@ -264,13 +340,18 @@ describe("Phase 10: Full MVP Integration", () => {
 		const tmpDir = makeTmpDir();
 		const projectsDir = path.join(tmpDir, "projects");
 
-		const projects = ["cli/alpha", "cli/beta", "telegram/123"].map((b) => loadProject(b, projectsDir));
+		const projects = ["cli/alpha", "cli/beta", "telegram/123"].map((b) =>
+			loadProject(b, projectsDir),
+		);
 
 		// Each project gets its own decision
 		projects.forEach((p, i) => {
 			p.decisions.addDecision({
-				sessionId: "s1", project: p.binding,
-				content: `Decision ${i} for ${p.binding}`, confidence: 0.95, source: "manual",
+				sessionId: "s1",
+				project: p.binding,
+				content: `Decision ${i} for ${p.binding}`,
+				confidence: 0.95,
+				source: "manual",
 			});
 		});
 
@@ -293,8 +374,15 @@ describe("Phase 10: Full MVP Integration", () => {
 		const steps = createWizardSteps();
 		expect(steps).toHaveLength(9);
 		expect(steps.map((s: { name: string }) => s.name)).toEqual([
-			"welcome", "project", "providers", "routing",
-			"embeddings", "channels", "persona", "review", "initialize",
+			"welcome",
+			"project",
+			"providers",
+			"routing",
+			"embeddings",
+			"channels",
+			"persona",
+			"review",
+			"initialize",
 		]);
 	});
 

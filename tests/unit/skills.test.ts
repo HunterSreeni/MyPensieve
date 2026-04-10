@@ -1,13 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { SkillRegistry, createUnifiedExecutor, type SkillContext } from "../../src/skills/executor.js";
-import { createDefaultRegistry } from "../../src/skills/registry.js";
-import { loadProject, closeProject } from "../../src/projects/loader.js";
-import { writeConfig } from "../../src/config/writer.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Config } from "../../src/config/schema.js";
-import { generateMcpServersConfig, MCP_CONFIGS } from "../../src/skills/mcp-config.js";
+import { writeConfig } from "../../src/config/writer.js";
+import { closeProject, loadProject } from "../../src/projects/loader.js";
+import {
+	type SkillContext,
+	SkillRegistry,
+	createUnifiedExecutor,
+} from "../../src/skills/executor.js";
+import { MCP_CONFIGS, generateMcpServersConfig } from "../../src/skills/mcp-config.js";
+import { createDefaultRegistry } from "../../src/skills/registry.js";
 
 function validConfig(): Config {
 	return {
@@ -15,9 +19,23 @@ function validConfig(): Config {
 		operator: { name: "Test", timezone: "UTC" },
 		tier_routing: { default: "ollama/llama3" },
 		embeddings: { enabled: false },
-		daily_log: { enabled: true, cron: "0 20 * * *", channel: "cli", auto_prompt_next_morning_if_missed: true },
-		backup: { enabled: true, cron: "30 2 * * *", retention_days: 30, destinations: [{ type: "local", path: "/tmp" }], include_secrets: false },
-		channels: { cli: { enabled: true, tool_escape_hatch: false }, telegram: { enabled: false, tool_escape_hatch: false } },
+		daily_log: {
+			enabled: true,
+			cron: "0 20 * * *",
+			channel: "cli",
+			auto_prompt_next_morning_if_missed: true,
+		},
+		backup: {
+			enabled: true,
+			cron: "30 2 * * *",
+			retention_days: 30,
+			destinations: [{ type: "local", path: "/tmp" }],
+			include_secrets: false,
+		},
+		channels: {
+			cli: { enabled: true, tool_escape_hatch: false },
+			telegram: { enabled: false, tool_escape_hatch: false },
+		},
 		extractor: { cron: "0 2 * * *" },
 	};
 }
@@ -126,19 +144,23 @@ describe("Daily-log skill", () => {
 
 	it("writes a daily log entry", async () => {
 		const registry = createDefaultRegistry();
-		const result = await registry.execute("daily-log", {
-			action: "write",
-			entry: {
-				wins: ["shipped Phase 5"],
-				blockers: [],
-				mood_score: 4,
-				mood_text: "good",
-				energy_score: 3,
-				energy_text: "moderate",
-				remember_tomorrow: "start Phase 6",
-				weekly_review_flag: false,
+		const result = await registry.execute(
+			"daily-log",
+			{
+				action: "write",
+				entry: {
+					wins: ["shipped Phase 5"],
+					blockers: [],
+					mood_score: 4,
+					mood_text: "good",
+					energy_score: 3,
+					energy_text: "moderate",
+					remember_tomorrow: "start Phase 6",
+					weekly_review_flag: false,
+				},
 			},
-		}, ctx);
+			ctx,
+		);
 
 		expect(result.success).toBe(true);
 		expect((result.data as { stored: boolean }).stored).toBe(true);
@@ -148,10 +170,23 @@ describe("Daily-log skill", () => {
 		const registry = createDefaultRegistry();
 
 		// Write first
-		await registry.execute("daily-log", {
-			action: "write",
-			entry: { wins: ["test"], blockers: [], mood_score: 5, mood_text: "great", energy_score: 5, energy_text: "high", remember_tomorrow: "", weekly_review_flag: false },
-		}, ctx);
+		await registry.execute(
+			"daily-log",
+			{
+				action: "write",
+				entry: {
+					wins: ["test"],
+					blockers: [],
+					mood_score: 5,
+					mood_text: "great",
+					energy_score: 5,
+					energy_text: "high",
+					remember_tomorrow: "",
+					weekly_review_flag: false,
+				},
+			},
+			ctx,
+		);
 
 		// Read back
 		const result = await registry.execute("daily-log", { action: "read" }, ctx);
@@ -199,8 +234,11 @@ describe("Memory-recall skill", () => {
 	it("recalls decisions from memory", async () => {
 		// Add a decision first
 		ctx.project.decisions.addDecision({
-			sessionId: "s1", project: "test",
-			content: "Use TypeScript for the MVP", confidence: 0.95, source: "manual",
+			sessionId: "s1",
+			project: "test",
+			content: "Use TypeScript for the MVP",
+			confidence: 0.95,
+			source: "manual",
 		});
 
 		const registry = createDefaultRegistry();
@@ -226,7 +264,11 @@ describe("Researcher skill", () => {
 		const result = await registry.execute("researcher", { topic: "AI safety", depth: "deep" }, ctx);
 
 		expect(result.success).toBe(true);
-		const data = result.data as { synthesis: string; citations: Array<{ index: number }>; query_plan: string[] };
+		const data = result.data as {
+			synthesis: string;
+			citations: Array<{ index: number }>;
+			query_plan: string[];
+		};
 		expect(data.synthesis).toContain("AI safety");
 		expect(data.citations.length).toBeGreaterThan(0);
 		expect(data.query_plan.length).toBeGreaterThan(1); // deep = multiple queries
@@ -242,11 +284,15 @@ describe("Blog-SEO skill", () => {
 		const { ctx, cleanup } = makeCtx(tmpDir);
 
 		const registry = createDefaultRegistry();
-		const longPost = "This is a test blog post about AI safety and its implications. ".repeat(30) + "What do you think about AI safety?";
-		const result = await registry.execute("blog-seo", {
-			prompt: longPost,
-			options: { keyword: "AI safety" },
-		}, ctx);
+		const longPost = `${"This is a test blog post about AI safety and its implications. ".repeat(30)}What do you think about AI safety?`;
+		const result = await registry.execute(
+			"blog-seo",
+			{
+				prompt: longPost,
+				options: { keyword: "AI safety" },
+			},
+			ctx,
+		);
 
 		expect(result.success).toBe(true);
 		const data = result.data as { seo_score: number; suggestions: string[] };

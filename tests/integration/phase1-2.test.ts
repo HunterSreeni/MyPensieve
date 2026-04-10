@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 /**
  * Cross-phase integration test: Phase 1 (Foundation) + Phase 2 (Gateway)
  *
@@ -11,28 +14,28 @@
  *   - Binding validator catches invalid channel configs
  *   - JSONL audit entries are written correctly
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import YAML from "yaml";
 
-import { writeConfig } from "../../src/config/writer.js";
 import { readConfig } from "../../src/config/reader.js";
 import type { Config } from "../../src/config/schema.js";
-import { scaffoldDirectories, verifyDirectories } from "../../src/init/directories.js";
-import { loadAllRoutingTables, DEFAULT_ROUTING_TABLES } from "../../src/gateway/routing-loader.js";
-import { GatewayDispatcher } from "../../src/gateway/dispatcher.js";
-import {
-	scanSkillsForRegistration,
-	applySkillRegistrations,
-} from "../../src/gateway/skill-registration.js";
-import { validateChannelBinding, isEscapeHatchAllowed } from "../../src/gateway/binding-validator.js";
-import { VERB_NAMES, type VerbName } from "../../src/gateway/verbs.js";
-import { readJsonlSync } from "../../src/utils/jsonl.js";
-import { getProjectBinding } from "../../src/core/session.js";
+import { writeConfig } from "../../src/config/writer.js";
 import { createMyPensieveExtension } from "../../src/core/extension.js";
+import { getProjectBinding } from "../../src/core/session.js";
+import {
+	isEscapeHatchAllowed,
+	validateChannelBinding,
+} from "../../src/gateway/binding-validator.js";
+import { GatewayDispatcher } from "../../src/gateway/dispatcher.js";
+import { DEFAULT_ROUTING_TABLES, loadAllRoutingTables } from "../../src/gateway/routing-loader.js";
 import type { RoutingTable } from "../../src/gateway/routing-schema.js";
+import {
+	applySkillRegistrations,
+	scanSkillsForRegistration,
+} from "../../src/gateway/skill-registration.js";
+import { VERB_NAMES, type VerbName } from "../../src/gateway/verbs.js";
+import { scaffoldDirectories, verifyDirectories } from "../../src/init/directories.js";
+import { readJsonlSync } from "../../src/utils/jsonl.js";
 
 // --- Test fixtures ---
 
@@ -111,7 +114,16 @@ describe("Phase 1+2 Integration: Config -> Gateway -> Dispatch", () => {
 		const executorLog: Array<{ target: string; type: string; args: unknown }> = [];
 		const mockExecutor = vi.fn(async (target: string, type: string, args: unknown) => {
 			executorLog.push({ target, type, args });
-			return { matches: [{ layer: "decisions", content: "found it", confidence: 0.9, timestamp: "2026-04-10T00:00:00Z" }] };
+			return {
+				matches: [
+					{
+						layer: "decisions",
+						content: "found it",
+						confidence: 0.9,
+						timestamp: "2026-04-10T00:00:00Z",
+					},
+				],
+			};
 		});
 		const dispatcher = new GatewayDispatcher(tables, mockExecutor);
 
@@ -138,11 +150,7 @@ describe("Phase 1+2 Integration: Config -> Gateway -> Dispatch", () => {
 			default_target_type: "extension",
 			rules: [],
 		};
-		fs.writeFileSync(
-			path.join(metaSkillsDir, "recall.yaml"),
-			YAML.stringify(customTable),
-			"utf-8",
-		);
+		fs.writeFileSync(path.join(metaSkillsDir, "recall.yaml"), YAML.stringify(customTable), "utf-8");
 
 		const tables = loadAllRoutingTables(metaSkillsDir);
 		expect(tables.get("recall")?.default_target).toBe("custom-memory");
@@ -292,7 +300,9 @@ describe("Phase 1+2 Integration: Config -> Gateway -> Dispatch", () => {
 		// Fire context and verify it returns operator info
 		const contextHandlers = handlers.get("context") ?? [];
 		for (const h of contextHandlers) {
-			const result = h({ type: "context", messages: [] }, {}) as { messages: Array<{ content: string }> } | undefined;
+			const result = h({ type: "context", messages: [] }, {}) as
+				| { messages: Array<{ content: string }> }
+				| undefined;
 			if (result) {
 				expect(result.messages[0]?.content).toContain("IntegrationTestUser");
 			}
@@ -324,7 +334,19 @@ describe("Phase 1+2 Integration: Config -> Gateway -> Dispatch", () => {
 
 		const result = await dispatcher.dispatch(
 			"journal",
-			{ action: "write", entry: { wins: ["shipped Phase 2"], mood_score: 4, mood_text: "good", energy_score: 3, energy_text: "moderate", blockers: [], remember_tomorrow: "start Phase 3", weekly_review_flag: false } },
+			{
+				action: "write",
+				entry: {
+					wins: ["shipped Phase 2"],
+					mood_score: 4,
+					mood_text: "good",
+					energy_score: 3,
+					energy_text: "moderate",
+					blockers: [],
+					remember_tomorrow: "start Phase 3",
+					weekly_review_flag: false,
+				},
+			},
 			{ channelType, project: projectBinding },
 		);
 
@@ -351,7 +373,9 @@ describe("Phase 3 readiness check", () => {
 		const decisionsPath = path.join(tmpDir, "decisions.jsonl");
 
 		try {
-			const { appendJsonl, readJsonlSync, queryJsonl, writeJsonlAtomic } = await import("../../src/utils/jsonl.js");
+			const { appendJsonl, readJsonlSync, queryJsonl, writeJsonlAtomic } = await import(
+				"../../src/utils/jsonl.js"
+			);
 
 			// Simulate decision storage
 			const decision1 = {
@@ -382,7 +406,10 @@ describe("Phase 3 readiness check", () => {
 			expect(all).toHaveLength(2);
 
 			// Query by confidence
-			const highConfidence = queryJsonl(decisionsPath, (r: { confidence: number }) => r.confidence >= 0.9);
+			const highConfidence = queryJsonl(
+				decisionsPath,
+				(r: { confidence: number }) => r.confidence >= 0.9,
+			);
 			expect(highConfidence).toHaveLength(1);
 
 			// Atomic rewrite (for compaction)

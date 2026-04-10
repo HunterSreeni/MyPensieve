@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "wizard-test-"));
 
@@ -45,9 +45,27 @@ describe("Wizard framework", () => {
 	it("runs all steps sequentially", async () => {
 		const stepLog: string[] = [];
 		const steps: WizardStep[] = [
-			{ name: "a", description: "Step A", run: async () => { stepLog.push("a"); } },
-			{ name: "b", description: "Step B", run: async () => { stepLog.push("b"); } },
-			{ name: "c", description: "Step C", run: async () => { stepLog.push("c"); } },
+			{
+				name: "a",
+				description: "Step A",
+				run: async () => {
+					stepLog.push("a");
+				},
+			},
+			{
+				name: "b",
+				description: "Step B",
+				run: async () => {
+					stepLog.push("b");
+				},
+			},
+			{
+				name: "c",
+				description: "Step C",
+				run: async () => {
+					stepLog.push("c");
+				},
+			},
 		];
 
 		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -67,9 +85,27 @@ describe("Wizard framework", () => {
 		});
 
 		const steps: WizardStep[] = [
-			{ name: "a", description: "A", run: async () => { stepLog.push("a"); } },
-			{ name: "b", description: "B", run: async () => { stepLog.push("b"); } },
-			{ name: "c", description: "C", run: async () => { stepLog.push("c"); } },
+			{
+				name: "a",
+				description: "A",
+				run: async () => {
+					stepLog.push("a");
+				},
+			},
+			{
+				name: "b",
+				description: "B",
+				run: async () => {
+					stepLog.push("b");
+				},
+			},
+			{
+				name: "c",
+				description: "C",
+				run: async () => {
+					stepLog.push("c");
+				},
+			},
 		];
 
 		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -90,8 +126,20 @@ describe("Wizard framework", () => {
 		});
 
 		const steps: WizardStep[] = [
-			{ name: "a", description: "A", run: async () => { stepLog.push("a"); } },
-			{ name: "b", description: "B", run: async () => { stepLog.push("b"); } },
+			{
+				name: "a",
+				description: "A",
+				run: async () => {
+					stepLog.push("a");
+				},
+			},
+			{
+				name: "b",
+				description: "B",
+				run: async () => {
+					stepLog.push("b");
+				},
+			},
 		];
 
 		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -102,9 +150,7 @@ describe("Wizard framework", () => {
 	});
 
 	it("progress is cleared after completion", async () => {
-		const steps: WizardStep[] = [
-			{ name: "a", description: "A", run: async () => {} },
-		];
+		const steps: WizardStep[] = [{ name: "a", description: "A", run: async () => {} }];
 
 		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
 		await runWizard(steps);
@@ -124,8 +170,15 @@ describe("Wizard steps", () => {
 		const steps = createWizardSteps();
 		const names = steps.map((s) => s.name);
 		expect(names).toEqual([
-			"welcome", "project", "providers", "routing",
-			"embeddings", "channels", "persona", "review", "initialize",
+			"welcome",
+			"project",
+			"providers",
+			"routing",
+			"embeddings",
+			"channels",
+			"persona",
+			"review",
+			"initialize",
 		]);
 	});
 });

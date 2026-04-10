@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ErrorDedup } from "../../src/ops/errors/dedup.js";
 import type { ErrorRecord } from "../../src/ops/errors/types.js";
 
@@ -60,18 +60,14 @@ describe("ErrorDedup", () => {
 
 	it("tracks different error types independently", () => {
 		dedup.record(makeError({ error_type: "network", error_src: "duckduckgo" }));
-		const result = dedup.record(
-			makeError({ error_type: "rate_limit", error_src: "openrouter" }),
-		);
+		const result = dedup.record(makeError({ error_type: "rate_limit", error_src: "openrouter" }));
 		expect(result.shouldSurface).toBe(true);
 		expect(result.count).toBe(1);
 	});
 
 	it("tracks different sources independently", () => {
 		dedup.record(makeError({ error_type: "network", error_src: "mcp-a" }));
-		const result = dedup.record(
-			makeError({ error_type: "network", error_src: "mcp-b" }),
-		);
+		const result = dedup.record(makeError({ error_type: "network", error_src: "mcp-b" }));
 		expect(result.shouldSurface).toBe(true);
 	});
 

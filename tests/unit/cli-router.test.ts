@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { registerCommand, getCommand, getAllCommands, dispatch } from "../../src/cli/router.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { dispatch, getAllCommands, getCommand, registerCommand } from "../../src/cli/router.js";
 
 describe("CLI router", () => {
 	it("registers and retrieves a command", () => {

@@ -1,15 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-	scanSkillsForRegistration,
-	applySkillRegistrations,
-} from "../../src/gateway/skill-registration.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_ROUTING_TABLES } from "../../src/gateway/routing-loader.js";
+import type { RoutingTable } from "../../src/gateway/routing-schema.js";
+import {
+	applySkillRegistrations,
+	scanSkillsForRegistration,
+} from "../../src/gateway/skill-registration.js";
 import type { VerbName } from "../../src/gateway/verbs.js";
 import { VERB_NAMES } from "../../src/gateway/verbs.js";
-import type { RoutingTable } from "../../src/gateway/routing-schema.js";
 
 describe("Skill registration", () => {
 	let tmpDir: string;
@@ -25,11 +25,7 @@ describe("Skill registration", () => {
 	function createSkillDir(name: string, frontmatter: string, body = "Skill body"): void {
 		const skillDir = path.join(tmpDir, name);
 		fs.mkdirSync(skillDir, { recursive: true });
-		fs.writeFileSync(
-			path.join(skillDir, "SKILL.md"),
-			`---\n${frontmatter}\n---\n${body}`,
-			"utf-8",
-		);
+		fs.writeFileSync(path.join(skillDir, "SKILL.md"), `---\n${frontmatter}\n---\n${body}`, "utf-8");
 	}
 
 	it("finds skills with mypensieve_exposes_via", () => {
@@ -53,7 +49,10 @@ describe("Skill registration", () => {
 	});
 
 	it("picks up custom priority", () => {
-		createSkillDir("priority-skill", "name: p\nmypensieve_exposes_via: produce\nmypensieve_priority: 5");
+		createSkillDir(
+			"priority-skill",
+			"name: p\nmypensieve_exposes_via: produce\nmypensieve_priority: 5",
+		);
 		const registrations = scanSkillsForRegistration(tmpDir);
 		expect(registrations[0]?.priority).toBe(5);
 	});
@@ -94,9 +93,7 @@ describe("applySkillRegistrations", () => {
 		const tables = makeTables();
 		const initialRuleCount = tables.get("recall")?.rules.length ?? 0;
 
-		applySkillRegistrations(tables, [
-			{ skillName: "custom-recall", verb: "recall", priority: 25 },
-		]);
+		applySkillRegistrations(tables, [{ skillName: "custom-recall", verb: "recall", priority: 25 }]);
 
 		const recallTable = tables.get("recall");
 		expect(recallTable?.rules.length).toBe(initialRuleCount + 1);
@@ -116,9 +113,7 @@ describe("applySkillRegistrations", () => {
 
 	it("respects custom priority in the added rule", () => {
 		const tables = makeTables();
-		applySkillRegistrations(tables, [
-			{ skillName: "high-priority", verb: "produce", priority: 1 },
-		]);
+		applySkillRegistrations(tables, [{ skillName: "high-priority", verb: "produce", priority: 1 }]);
 
 		const rule = tables.get("produce")?.rules.find((r) => r.target === "high-priority");
 		expect(rule?.priority).toBe(1);

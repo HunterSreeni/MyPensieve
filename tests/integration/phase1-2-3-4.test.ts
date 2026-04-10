@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 /**
  * Cross-phase integration test: Phase 1+2+3+4
  *
@@ -8,19 +11,16 @@
  * Simulates what happens when an operator runs `mypensieve start`,
  * makes decisions, exits, and starts a new session to recall them.
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { writeConfig } from "../../src/config/writer.js";
 import { readConfig } from "../../src/config/reader.js";
 import type { Config } from "../../src/config/schema.js";
-import { validateChannelBinding } from "../../src/gateway/binding-validator.js";
+import { writeConfig } from "../../src/config/writer.js";
 import { getProjectBinding } from "../../src/core/session.js";
-import { loadProject, closeProject } from "../../src/projects/loader.js";
-import { loadAllRoutingTables } from "../../src/gateway/routing-loader.js";
+import { validateChannelBinding } from "../../src/gateway/binding-validator.js";
 import { GatewayDispatcher, type SkillExecutor } from "../../src/gateway/dispatcher.js";
+import { loadAllRoutingTables } from "../../src/gateway/routing-loader.js";
+import { closeProject, loadProject } from "../../src/projects/loader.js";
 
 function validConfig(): Config {
 	return {
@@ -28,9 +28,23 @@ function validConfig(): Config {
 		operator: { name: "Sreeni", timezone: "Asia/Kolkata" },
 		tier_routing: { default: "ollama/llama3" },
 		embeddings: { enabled: false },
-		daily_log: { enabled: true, cron: "0 20 * * *", channel: "cli", auto_prompt_next_morning_if_missed: true },
-		backup: { enabled: true, cron: "30 2 * * *", retention_days: 30, destinations: [{ type: "local", path: "/tmp" }], include_secrets: false },
-		channels: { cli: { enabled: true, tool_escape_hatch: false }, telegram: { enabled: false, tool_escape_hatch: false } },
+		daily_log: {
+			enabled: true,
+			cron: "0 20 * * *",
+			channel: "cli",
+			auto_prompt_next_morning_if_missed: true,
+		},
+		backup: {
+			enabled: true,
+			cron: "30 2 * * *",
+			retention_days: 30,
+			destinations: [{ type: "local", path: "/tmp" }],
+			include_secrets: false,
+		},
+		channels: {
+			cli: { enabled: true, tool_escape_hatch: false },
+			telegram: { enabled: false, tool_escape_hatch: false },
+		},
 		extractor: { cron: "0 2 * * *" },
 	};
 }
@@ -132,7 +146,11 @@ describe("Phase 1+2+3+4: Full session lifecycle simulation", () => {
 			{ channelType: "cli", project: binding },
 		);
 		const runtimeMatches = runtimeResult.result as Array<{ content: string }>;
-		expect(runtimeMatches.some((m) => m.content.includes("runtime foundation") || m.content.includes("Pi"))).toBe(true);
+		expect(
+			runtimeMatches.some(
+				(m) => m.content.includes("runtime foundation") || m.content.includes("Pi"),
+			),
+		).toBe(true);
 
 		// Recall: "What's the MVP scope?"
 		const scopeResult = await dispatcher.dispatch(
@@ -141,7 +159,9 @@ describe("Phase 1+2+3+4: Full session lifecycle simulation", () => {
 			{ channelType: "cli", project: binding },
 		);
 		const scopeMatches = scopeResult.result as Array<{ content: string }>;
-		expect(scopeMatches.some((m) => m.content.includes("MVP") || m.content.includes("Telegram"))).toBe(true);
+		expect(
+			scopeMatches.some((m) => m.content.includes("MVP") || m.content.includes("Telegram")),
+		).toBe(true);
 
 		// Recall: "Any open threads about OAuth?"
 		const oauthResult = await dispatcher.dispatch(
@@ -168,12 +188,18 @@ describe("Phase 1+2+3+4: Full session lifecycle simulation", () => {
 
 		// Add decisions to each project
 		projectA.decisions.addDecision({
-			sessionId: "s1", project: "cli/project-a",
-			content: "Project A secret decision", confidence: 0.95, source: "manual",
+			sessionId: "s1",
+			project: "cli/project-a",
+			content: "Project A secret decision",
+			confidence: 0.95,
+			source: "manual",
 		});
 		projectB.decisions.addDecision({
-			sessionId: "s1", project: "cli/project-b",
-			content: "Project B public decision", confidence: 0.95, source: "manual",
+			sessionId: "s1",
+			project: "cli/project-b",
+			content: "Project B public decision",
+			confidence: 0.95,
+			source: "manual",
 		});
 
 		// Query from project A should not see project B's decisions
@@ -196,17 +222,29 @@ describe("Phase 1+2+3+4: Full session lifecycle simulation", () => {
 		// Add various items
 		for (let i = 0; i < 5; i++) {
 			project.decisions.addDecision({
-				sessionId: "s1", project: "test",
-				content: `decision ${i}`, confidence: 0.8, source: "auto",
+				sessionId: "s1",
+				project: "test",
+				content: `decision ${i}`,
+				confidence: 0.8,
+				source: "auto",
 			});
 		}
 		project.threads.createThread({
-			project: "test", title: "Open thread",
-			firstMessage: { timestamp: new Date().toISOString(), session_id: "s1", role: "operator", content: "msg" },
+			project: "test",
+			title: "Open thread",
+			firstMessage: {
+				timestamp: new Date().toISOString(),
+				session_id: "s1",
+				role: "operator",
+				content: "msg",
+			},
 		});
 		project.persona.addDelta({
-			sessionId: "s1", field: "style",
-			deltaType: "add", content: "terse", confidence: 0.7,
+			sessionId: "s1",
+			field: "style",
+			deltaType: "add",
+			content: "terse",
+			confidence: 0.7,
 		});
 
 		const stats = project.index.getStats();

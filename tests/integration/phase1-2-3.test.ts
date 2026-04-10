@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 /**
  * Cross-phase integration test: Phase 1+2+3
  *
@@ -7,23 +10,20 @@
  *
  * This is the "can the agent recall its own decisions?" test.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { writeConfig } from "../../src/config/writer.js";
 import type { Config } from "../../src/config/schema.js";
+import { writeConfig } from "../../src/config/writer.js";
+import { getProjectBinding } from "../../src/core/session.js";
 import { GatewayDispatcher } from "../../src/gateway/dispatcher.js";
 import { loadAllRoutingTables } from "../../src/gateway/routing-loader.js";
 import { VERB_NAMES } from "../../src/gateway/verbs.js";
-import { MemoryIndex } from "../../src/memory/sqlite-index.js";
-import { DecisionsLayer } from "../../src/memory/layers/decisions.js";
-import { ThreadsLayer } from "../../src/memory/layers/threads.js";
-import { PersonaLayer } from "../../src/memory/layers/persona.js";
-import { MemoryQuery } from "../../src/memory/query.js";
 import { CheckpointManager } from "../../src/memory/checkpoint.js";
-import { getProjectBinding } from "../../src/core/session.js";
+import { DecisionsLayer } from "../../src/memory/layers/decisions.js";
+import { PersonaLayer } from "../../src/memory/layers/persona.js";
+import { ThreadsLayer } from "../../src/memory/layers/threads.js";
+import { MemoryQuery } from "../../src/memory/query.js";
+import { MemoryIndex } from "../../src/memory/sqlite-index.js";
 
 function validConfig(): Config {
 	return {
@@ -31,9 +31,23 @@ function validConfig(): Config {
 		operator: { name: "Sreeni", timezone: "Asia/Kolkata" },
 		tier_routing: { default: "ollama/llama3" },
 		embeddings: { enabled: false },
-		daily_log: { enabled: true, cron: "0 20 * * *", channel: "cli", auto_prompt_next_morning_if_missed: true },
-		backup: { enabled: true, cron: "30 2 * * *", retention_days: 30, destinations: [{ type: "local", path: "/tmp" }], include_secrets: false },
-		channels: { cli: { enabled: true, tool_escape_hatch: false }, telegram: { enabled: false, tool_escape_hatch: false } },
+		daily_log: {
+			enabled: true,
+			cron: "0 20 * * *",
+			channel: "cli",
+			auto_prompt_next_morning_if_missed: true,
+		},
+		backup: {
+			enabled: true,
+			cron: "30 2 * * *",
+			retention_days: 30,
+			destinations: [{ type: "local", path: "/tmp" }],
+			include_secrets: false,
+		},
+		channels: {
+			cli: { enabled: true, tool_escape_hatch: false },
+			telegram: { enabled: false, tool_escape_hatch: false },
+		},
 		extractor: { cron: "0 2 * * *" },
 	};
 }
@@ -195,8 +209,11 @@ describe("Phase 1+2+3: Gateway -> Memory -> Recall", () => {
 
 		// After extracting session-001
 		decisions.addDecision({
-			sessionId: "session-001", project: "test",
-			content: "decision from session 1", confidence: 0.95, source: "manual",
+			sessionId: "session-001",
+			project: "test",
+			content: "decision from session 1",
+			confidence: 0.95,
+			source: "manual",
 		});
 		manager.write({
 			last_processed_session_id: "session-001",
@@ -212,8 +229,11 @@ describe("Phase 1+2+3: Gateway -> Memory -> Recall", () => {
 
 		// After extracting session-002
 		decisions.addDecision({
-			sessionId: "session-002", project: "test",
-			content: "decision from session 2", confidence: 0.65, source: "auto",
+			sessionId: "session-002",
+			project: "test",
+			content: "decision from session 2",
+			confidence: 0.65,
+			source: "auto",
 		});
 		manager.write({
 			last_processed_session_id: "session-002",
@@ -227,13 +247,37 @@ describe("Phase 1+2+3: Gateway -> Memory -> Recall", () => {
 	});
 
 	it("memory index stats reflect all layers", () => {
-		decisions.addDecision({ sessionId: "s1", project: "test", content: "d1", confidence: 0.9, source: "manual" });
-		decisions.addDecision({ sessionId: "s1", project: "test", content: "d2", confidence: 0.6, source: "auto" });
-		threads.createThread({
-			project: "test", title: "Thread 1",
-			firstMessage: { timestamp: "2026-04-10T12:00:00Z", session_id: "s1", role: "operator", content: "msg" },
+		decisions.addDecision({
+			sessionId: "s1",
+			project: "test",
+			content: "d1",
+			confidence: 0.9,
+			source: "manual",
 		});
-		persona.addDelta({ sessionId: "s1", field: "style", deltaType: "add", content: "terse", confidence: 0.7 });
+		decisions.addDecision({
+			sessionId: "s1",
+			project: "test",
+			content: "d2",
+			confidence: 0.6,
+			source: "auto",
+		});
+		threads.createThread({
+			project: "test",
+			title: "Thread 1",
+			firstMessage: {
+				timestamp: "2026-04-10T12:00:00Z",
+				session_id: "s1",
+				role: "operator",
+				content: "msg",
+			},
+		});
+		persona.addDelta({
+			sessionId: "s1",
+			field: "style",
+			deltaType: "add",
+			content: "terse",
+			confidence: 0.7,
+		});
 
 		const stats = index.getStats();
 		expect(stats.decisions).toBe(2);
@@ -244,8 +288,20 @@ describe("Phase 1+2+3: Gateway -> Memory -> Recall", () => {
 	});
 
 	it("security: memory queries are project-scoped", () => {
-		decisions.addDecision({ sessionId: "s1", project: "project-a", content: "secret of project A", confidence: 0.95, source: "manual" });
-		decisions.addDecision({ sessionId: "s1", project: "project-b", content: "public info from B", confidence: 0.95, source: "manual" });
+		decisions.addDecision({
+			sessionId: "s1",
+			project: "project-a",
+			content: "secret of project A",
+			confidence: 0.95,
+			source: "manual",
+		});
+		decisions.addDecision({
+			sessionId: "s1",
+			project: "project-b",
+			content: "public info from B",
+			confidence: 0.95,
+			source: "manual",
+		});
 
 		// Query scoped to project-b should not return project-a's decisions
 		const results = decisions.query({ project: "project-b" });

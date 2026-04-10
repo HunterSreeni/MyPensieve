@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ConfigSchema, type Config } from "../../src/config/schema.js";
-import { readConfig, ConfigReadError } from "../../src/config/reader.js";
-import { writeConfig, ConfigWriteError } from "../../src/config/writer.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ConfigReadError, readConfig } from "../../src/config/reader.js";
+import { type Config, ConfigSchema } from "../../src/config/schema.js";
+import { ConfigWriteError, writeConfig } from "../../src/config/writer.js";
 
 // --- Test fixtures ---
 
@@ -35,7 +35,12 @@ function validConfig(): Config {
 		},
 		channels: {
 			cli: { enabled: true, tool_escape_hatch: false },
-			telegram: { enabled: false, tool_escape_hatch: false, allowed_peers: [], allow_groups: false },
+			telegram: {
+				enabled: false,
+				tool_escape_hatch: false,
+				allowed_peers: [],
+				allow_groups: false,
+			},
 		},
 		extractor: { cron: "0 2 * * *" },
 	};

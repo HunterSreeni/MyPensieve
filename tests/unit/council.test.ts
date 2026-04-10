@@ -1,8 +1,14 @@
-import { describe, it, expect } from "vitest";
-import { CouncilManager, type AgentPersona } from "../../src/council/manager.js";
+import { describe, expect, it } from "vitest";
+import { type AgentPersona, CouncilManager } from "../../src/council/manager.js";
 import {
-	ORCHESTRATOR, RESEARCHER, CRITIC, DEVIL_ADVOCATE,
-	DEFAULT_AGENTS, AVAILABLE_AGENTS, getAgentByName, resolveAgentModel,
+	AVAILABLE_AGENTS,
+	CRITIC,
+	DEFAULT_AGENTS,
+	DEVIL_ADVOCATE,
+	ORCHESTRATOR,
+	RESEARCHER,
+	getAgentByName,
+	resolveAgentModel,
 } from "../../src/council/personas.js";
 
 const testAgents: AgentPersona[] = [

@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 /**
  * E2E Test Suite: MyPensieve Full Product
  *
@@ -17,33 +20,33 @@
  *   9. Backup & restore readiness
  *  10. Security enforcement
  */
-import { describe, it, expect, afterEach } from "vitest";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { writeConfig, readConfig } from "../../src/config/index.js";
+import { chunkMessage } from "../../src/channels/telegram/formatter.js";
+import { PeerNotAllowedError, PeerSessionManager } from "../../src/channels/telegram/sessions.js";
+import { readConfig, writeConfig } from "../../src/config/index.js";
 import type { Config } from "../../src/config/schema.js";
-import { scaffoldDirectories, verifyDirectories } from "../../src/init/directories.js";
-import { validateChannelBinding } from "../../src/gateway/binding-validator.js";
 import { getProjectBinding } from "../../src/core/session.js";
-import { loadProject, closeProject, listProjects } from "../../src/projects/loader.js";
-import { loadAllRoutingTables } from "../../src/gateway/routing-loader.js";
-import { GatewayDispatcher } from "../../src/gateway/dispatcher.js";
-import { scanSkillsForRegistration, applySkillRegistrations } from "../../src/gateway/skill-registration.js";
-import { createDefaultRegistry } from "../../src/skills/registry.js";
-import { createUnifiedExecutor, type SkillContext } from "../../src/skills/executor.js";
-import { VERB_NAMES } from "../../src/gateway/verbs.js";
 import { CouncilManager } from "../../src/council/manager.js";
 import { AVAILABLE_AGENTS, DEFAULT_AGENTS, resolveAgentModel } from "../../src/council/personas.js";
-import { PeerSessionManager, PeerNotAllowedError } from "../../src/channels/telegram/sessions.js";
-import { chunkMessage } from "../../src/channels/telegram/formatter.js";
-import { ErrorDedup } from "../../src/ops/errors/dedup.js";
-import { CircuitBreaker, CircuitBreakerRegistry } from "../../src/ops/errors/circuit-breaker.js";
-import { pruneBackups } from "../../src/ops/backup/engine.js";
-import { readJsonlSync, appendJsonl } from "../../src/utils/jsonl.js";
-import { generateMcpServersConfig } from "../../src/skills/mcp-config.js";
+import { validateChannelBinding } from "../../src/gateway/binding-validator.js";
+import { GatewayDispatcher } from "../../src/gateway/dispatcher.js";
+import { loadAllRoutingTables } from "../../src/gateway/routing-loader.js";
+import {
+	applySkillRegistrations,
+	scanSkillsForRegistration,
+} from "../../src/gateway/skill-registration.js";
+import { VERB_NAMES } from "../../src/gateway/verbs.js";
+import { scaffoldDirectories, verifyDirectories } from "../../src/init/directories.js";
 import type { DailyLogEntry } from "../../src/memory/types.js";
+import { pruneBackups } from "../../src/ops/backup/engine.js";
+import { CircuitBreaker, CircuitBreakerRegistry } from "../../src/ops/errors/circuit-breaker.js";
+import { ErrorDedup } from "../../src/ops/errors/dedup.js";
+import { closeProject, listProjects, loadProject } from "../../src/projects/loader.js";
+import { type SkillContext, createUnifiedExecutor } from "../../src/skills/executor.js";
+import { generateMcpServersConfig } from "../../src/skills/mcp-config.js";
+import { createDefaultRegistry } from "../../src/skills/registry.js";
+import { appendJsonl, readJsonlSync } from "../../src/utils/jsonl.js";
 
 // --- Helpers ---
 
@@ -53,18 +56,38 @@ function makeConfig(overrides?: Partial<Config>): Config {
 		operator: { name: "Sreeni", timezone: "Asia/Kolkata" },
 		tier_routing: { default: "not-configured" },
 		embeddings: { enabled: false },
-		daily_log: { enabled: true, cron: "0 20 * * *", channel: "cli", auto_prompt_next_morning_if_missed: true },
-		backup: { enabled: true, cron: "30 2 * * *", retention_days: 30, destinations: [{ type: "local", path: "/tmp/mypensieve-backups" }], include_secrets: false },
+		daily_log: {
+			enabled: true,
+			cron: "0 20 * * *",
+			channel: "cli",
+			auto_prompt_next_morning_if_missed: true,
+		},
+		backup: {
+			enabled: true,
+			cron: "30 2 * * *",
+			retention_days: 30,
+			destinations: [{ type: "local", path: "/tmp/mypensieve-backups" }],
+			include_secrets: false,
+		},
 		channels: {
 			cli: { enabled: true, tool_escape_hatch: false },
-			telegram: { enabled: true, tool_escape_hatch: false, allowed_peers: ["sreeni-123"], allow_groups: false },
+			telegram: {
+				enabled: true,
+				tool_escape_hatch: false,
+				allowed_peers: ["sreeni-123"],
+				allow_groups: false,
+			},
 		},
 		extractor: { cron: "0 2 * * *" },
 		...overrides,
 	};
 }
 
-function setupSession(tmpDir: string, channelType: "cli" | "telegram" = "cli", identifier = "/home/sreeni/project") {
+function setupSession(
+	tmpDir: string,
+	channelType: "cli" | "telegram" = "cli",
+	identifier = "/home/sreeni/project",
+) {
 	const configPath = path.join(tmpDir, "config.json");
 	const projectsDir = path.join(tmpDir, "projects");
 	const metaSkillsDir = path.join(tmpDir, "meta-skills");
@@ -87,15 +110,33 @@ function setupSession(tmpDir: string, channelType: "cli" | "telegram" = "cli", i
 
 	const dispatcher = new GatewayDispatcher(tables, executor);
 
-	return { dispatcher, project, config, binding, registry, ctx, configPath, projectsDir, metaSkillsDir, skillsDir };
+	return {
+		dispatcher,
+		project,
+		config,
+		binding,
+		registry,
+		ctx,
+		configPath,
+		projectsDir,
+		metaSkillsDir,
+		skillsDir,
+	};
 }
 
 // --- Test suites ---
 
 describe("E2E: Fresh install & first session", () => {
 	const dirs: string[] = [];
-	function tmp() { const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-")); dirs.push(d); return d; }
-	afterEach(() => { dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true })); dirs.length = 0; });
+	function tmp() {
+		const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-"));
+		dirs.push(d);
+		return d;
+	}
+	afterEach(() => {
+		dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true }));
+		dirs.length = 0;
+	});
 
 	it("scenario: operator installs, configures, starts first session, makes decisions, exits", async () => {
 		const tmpDir = tmp();
@@ -114,33 +155,48 @@ describe("E2E: Fresh install & first session", () => {
 
 		// 4. Operator makes 3 decisions during session
 		project.decisions.addDecision({
-			sessionId: "session-001", project: project.binding,
+			sessionId: "session-001",
+			project: project.binding,
 			content: "Build on Pi because it handles agent loop, sessions, and extensions",
-			confidence: 0.95, source: "manual", tags: ["architecture"],
+			confidence: 0.95,
+			source: "manual",
+			tags: ["architecture"],
 		});
 		project.decisions.addDecision({
-			sessionId: "session-001", project: project.binding,
+			sessionId: "session-001",
+			project: project.binding,
 			content: "8-verb gateway because security and token savings",
-			confidence: 0.95, source: "manual", tags: ["architecture", "security"],
+			confidence: 0.95,
+			source: "manual",
+			tags: ["architecture", "security"],
 		});
 		project.decisions.addDecision({
-			sessionId: "session-001", project: project.binding,
+			sessionId: "session-001",
+			project: project.binding,
 			content: "Per-agent model assignment, no hardcoded tiers",
-			confidence: 0.95, source: "manual", tags: ["models"],
+			confidence: 0.95,
+			source: "manual",
+			tags: ["models"],
 		});
 
 		// 5. Write journal entry
-		const journalResult = await dispatcher.dispatch("journal", {
-			action: "write",
-			entry: {
-				wins: ["completed MVP in one session"],
-				blockers: ["Pi re-audit pending"],
-				mood_score: 5, mood_text: "on fire",
-				energy_score: 4, energy_text: "strong",
-				remember_tomorrow: "run pi-reaudit.sh",
-				weekly_review_flag: false,
+		const journalResult = await dispatcher.dispatch(
+			"journal",
+			{
+				action: "write",
+				entry: {
+					wins: ["completed MVP in one session"],
+					blockers: ["Pi re-audit pending"],
+					mood_score: 5,
+					mood_text: "on fire",
+					energy_score: 4,
+					energy_text: "strong",
+					remember_tomorrow: "run pi-reaudit.sh",
+					weekly_review_flag: false,
+				},
 			},
-		}, { channelType: "cli", project: project.binding });
+			{ channelType: "cli", project: project.binding },
+		);
 
 		expect((journalResult.result as { stored: boolean }).stored).toBe(true);
 
@@ -170,8 +226,15 @@ describe("E2E: Fresh install & first session", () => {
 
 describe("E2E: Multi-session memory persistence", () => {
 	const dirs: string[] = [];
-	function tmp() { const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-mem-")); dirs.push(d); return d; }
-	afterEach(() => { dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true })); dirs.length = 0; });
+	function tmp() {
+		const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-mem-"));
+		dirs.push(d);
+		return d;
+	}
+	afterEach(() => {
+		dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true }));
+		dirs.length = 0;
+	});
 
 	it("scenario: decisions from session 1 are recallable in session 2 and 3", async () => {
 		const tmpDir = tmp();
@@ -179,19 +242,24 @@ describe("E2E: Multi-session memory persistence", () => {
 		// --- Session 1: make decisions ---
 		const s1 = setupSession(tmpDir);
 		s1.project.decisions.addDecision({
-			sessionId: "session-001", project: s1.binding,
+			sessionId: "session-001",
+			project: s1.binding,
 			content: "Use JSONL as source of truth, SQLite as derived index",
-			confidence: 0.95, source: "manual",
+			confidence: 0.95,
+			source: "manual",
 		});
 		s1.project.decisions.addDecision({
-			sessionId: "session-001", project: s1.binding,
+			sessionId: "session-001",
+			project: s1.binding,
 			content: "Telegram bot must have allowed_peers whitelist",
-			confidence: 0.95, source: "manual",
+			confidence: 0.95,
+			source: "manual",
 		});
 		s1.project.checkpoint.write({
 			last_processed_session_id: "session-001",
 			last_processed_timestamp: new Date().toISOString(),
-			total_sessions_processed: 1, last_run_status: "success",
+			total_sessions_processed: 1,
+			last_run_status: "success",
 		});
 		closeProject(s1.project);
 
@@ -199,9 +267,13 @@ describe("E2E: Multi-session memory persistence", () => {
 		const s2 = setupSession(tmpDir);
 		s2.project.decisions.rebuildIndex(); // rebuild from JSONL on session start
 
-		const recallResult = await s2.dispatcher.dispatch("recall", {
-			query: "JSONL",
-		}, { channelType: "cli", project: s2.binding });
+		const recallResult = await s2.dispatcher.dispatch(
+			"recall",
+			{
+				query: "JSONL",
+			},
+			{ channelType: "cli", project: s2.binding },
+		);
 
 		const matches = (recallResult.result as { matches: Array<{ content: string }> }).matches;
 		expect(matches.length).toBeGreaterThanOrEqual(1);
@@ -209,9 +281,11 @@ describe("E2E: Multi-session memory persistence", () => {
 
 		// Add a new decision in session 2
 		s2.project.decisions.addDecision({
-			sessionId: "session-002", project: s2.binding,
+			sessionId: "session-002",
+			project: s2.binding,
 			content: "No hardcoded model tiers, operator picks per-agent",
-			confidence: 0.95, source: "manual",
+			confidence: 0.95,
+			source: "manual",
 		});
 		closeProject(s2.project);
 
@@ -223,10 +297,16 @@ describe("E2E: Multi-session memory persistence", () => {
 		expect(allDecisions).toHaveLength(3); // 2 from s1 + 1 from s2
 
 		// Recall specific topics
-		const telegramRecall = await s3.dispatcher.dispatch("recall", {
-			query: "Telegram",
-		}, { channelType: "cli", project: s3.binding });
-		expect((telegramRecall.result as { matches: Array<{ content: string }> }).matches.length).toBeGreaterThanOrEqual(1);
+		const telegramRecall = await s3.dispatcher.dispatch(
+			"recall",
+			{
+				query: "Telegram",
+			},
+			{ channelType: "cli", project: s3.binding },
+		);
+		expect(
+			(telegramRecall.result as { matches: Array<{ content: string }> }).matches.length,
+		).toBeGreaterThanOrEqual(1);
 
 		// Checkpoint shows total progress
 		expect(s3.project.checkpoint.isProcessed("session-001")).toBe(true);
@@ -238,33 +318,79 @@ describe("E2E: Multi-session memory persistence", () => {
 
 describe("E2E: Daily journal lifecycle", () => {
 	const dirs: string[] = [];
-	function tmp() { const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-journal-")); dirs.push(d); return d; }
-	afterEach(() => { dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true })); dirs.length = 0; });
+	function tmp() {
+		const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-journal-"));
+		dirs.push(d);
+		return d;
+	}
+	afterEach(() => {
+		dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true }));
+		dirs.length = 0;
+	});
 
 	it("scenario: write entries over multiple days, read trends, run weekly review", async () => {
 		const { dispatcher, project, binding } = setupSession(tmp());
 		const ctx = { channelType: "cli" as const, project: binding };
 
 		// Day 1
-		await dispatcher.dispatch("journal", {
-			action: "write",
-			date: "2026-04-07",
-			entry: { wins: ["locked architecture"], blockers: [], mood_score: 5, mood_text: "great", energy_score: 4, energy_text: "high", remember_tomorrow: "start impl", weekly_review_flag: false },
-		}, ctx);
+		await dispatcher.dispatch(
+			"journal",
+			{
+				action: "write",
+				date: "2026-04-07",
+				entry: {
+					wins: ["locked architecture"],
+					blockers: [],
+					mood_score: 5,
+					mood_text: "great",
+					energy_score: 4,
+					energy_text: "high",
+					remember_tomorrow: "start impl",
+					weekly_review_flag: false,
+				},
+			},
+			ctx,
+		);
 
 		// Day 2
-		await dispatcher.dispatch("journal", {
-			action: "write",
-			date: "2026-04-08",
-			entry: { wins: ["built Phase 1-5"], blockers: ["waiting for re-audit"], mood_score: 4, mood_text: "good", energy_score: 3, energy_text: "ok", remember_tomorrow: "finish phases", weekly_review_flag: false },
-		}, ctx);
+		await dispatcher.dispatch(
+			"journal",
+			{
+				action: "write",
+				date: "2026-04-08",
+				entry: {
+					wins: ["built Phase 1-5"],
+					blockers: ["waiting for re-audit"],
+					mood_score: 4,
+					mood_text: "good",
+					energy_score: 3,
+					energy_text: "ok",
+					remember_tomorrow: "finish phases",
+					weekly_review_flag: false,
+				},
+			},
+			ctx,
+		);
 
 		// Day 3
-		await dispatcher.dispatch("journal", {
-			action: "write",
-			date: "2026-04-09",
-			entry: { wins: ["completed all 10 phases"], blockers: [], mood_score: 5, mood_text: "on fire", energy_score: 5, energy_text: "peak", remember_tomorrow: "test everything", weekly_review_flag: true },
-		}, ctx);
+		await dispatcher.dispatch(
+			"journal",
+			{
+				action: "write",
+				date: "2026-04-09",
+				entry: {
+					wins: ["completed all 10 phases"],
+					blockers: [],
+					mood_score: 5,
+					mood_text: "on fire",
+					energy_score: 5,
+					energy_text: "peak",
+					remember_tomorrow: "test everything",
+					weekly_review_flag: true,
+				},
+			},
+			ctx,
+		);
 
 		// Read back a specific day
 		const day2 = await dispatcher.dispatch("journal", { action: "read", date: "2026-04-08" }, ctx);
@@ -290,8 +416,15 @@ describe("E2E: Daily journal lifecycle", () => {
 
 describe("E2E: Council deliberation", () => {
 	const dirs: string[] = [];
-	function tmp() { const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-council-")); dirs.push(d); return d; }
-	afterEach(() => { dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true })); dirs.length = 0; });
+	function tmp() {
+		const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-council-"));
+		dirs.push(d);
+		return d;
+	}
+	afterEach(() => {
+		dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true }));
+		dirs.length = 0;
+	});
 
 	it("scenario: 4 agents deliberate, critic dissents, result has consensus=false", async () => {
 		// Assign different models to each agent (simulating user config)
@@ -350,8 +483,15 @@ describe("E2E: Council deliberation", () => {
 
 describe("E2E: Cross-channel isolation", () => {
 	const dirs: string[] = [];
-	function tmp() { const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-channel-")); dirs.push(d); return d; }
-	afterEach(() => { dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true })); dirs.length = 0; });
+	function tmp() {
+		const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-channel-"));
+		dirs.push(d);
+		return d;
+	}
+	afterEach(() => {
+		dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true }));
+		dirs.length = 0;
+	});
 
 	it("scenario: CLI decisions invisible to Telegram, and vice versa", async () => {
 		const tmpDir = tmp();
@@ -360,32 +500,45 @@ describe("E2E: Cross-channel isolation", () => {
 		// CLI session - add secret decision
 		const cliProject = loadProject("cli/work-project", projectsDir);
 		cliProject.decisions.addDecision({
-			sessionId: "cli-s1", project: "cli/work-project",
+			sessionId: "cli-s1",
+			project: "cli/work-project",
 			content: "Internal: salary negotiation strategy - ask for 20% raise",
-			confidence: 0.95, source: "manual",
+			confidence: 0.95,
+			source: "manual",
 		});
 
 		// Telegram session - add public decision
 		const telegramProject = loadProject("telegram/sreeni-123", projectsDir);
 		telegramProject.decisions.addDecision({
-			sessionId: "tg-s1", project: "telegram/sreeni-123",
+			sessionId: "tg-s1",
+			project: "telegram/sreeni-123",
 			content: "Shared: blog post schedule is every 3rd day",
-			confidence: 0.95, source: "manual",
+			confidence: 0.95,
+			source: "manual",
 		});
 
 		// CLI recall should NOT see Telegram data
-		const cliResults = cliProject.memoryQuery.recall({ query: "blog", project: "cli/work-project" });
+		const cliResults = cliProject.memoryQuery.recall({
+			query: "blog",
+			project: "cli/work-project",
+		});
 		expect(cliResults).toHaveLength(0);
 
 		// Telegram recall should NOT see CLI data
-		const tgResults = telegramProject.memoryQuery.recall({ query: "salary", project: "telegram/sreeni-123" });
+		const tgResults = telegramProject.memoryQuery.recall({
+			query: "salary",
+			project: "telegram/sreeni-123",
+		});
 		expect(tgResults).toHaveLength(0);
 
 		// Each channel sees its own data
 		const cliOwn = cliProject.memoryQuery.recall({ query: "salary", project: "cli/work-project" });
 		expect(cliOwn.length).toBeGreaterThan(0);
 
-		const tgOwn = telegramProject.memoryQuery.recall({ query: "blog", project: "telegram/sreeni-123" });
+		const tgOwn = telegramProject.memoryQuery.recall({
+			query: "blog",
+			project: "telegram/sreeni-123",
+		});
 		expect(tgOwn.length).toBeGreaterThan(0);
 
 		// List shows both projects
@@ -400,8 +553,15 @@ describe("E2E: Cross-channel isolation", () => {
 
 describe("E2E: All 8 verbs end-to-end", () => {
 	const dirs: string[] = [];
-	function tmp() { const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-verbs-")); dirs.push(d); return d; }
-	afterEach(() => { dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true })); dirs.length = 0; });
+	function tmp() {
+		const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-verbs-"));
+		dirs.push(d);
+		return d;
+	}
+	afterEach(() => {
+		dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true }));
+		dirs.length = 0;
+	});
 
 	it("scenario: exercise every verb with realistic args and verify output structure", async () => {
 		const { dispatcher, project, binding } = setupSession(tmp());
@@ -409,8 +569,11 @@ describe("E2E: All 8 verbs end-to-end", () => {
 
 		// Seed some memory first
 		project.decisions.addDecision({
-			sessionId: "s1", project: binding,
-			content: "Use Pi as runtime foundation", confidence: 0.95, source: "manual",
+			sessionId: "s1",
+			project: binding,
+			content: "Use Pi as runtime foundation",
+			confidence: 0.95,
+			source: "manual",
 		});
 
 		// 1. RECALL - query memory
@@ -421,10 +584,18 @@ describe("E2E: All 8 verbs end-to-end", () => {
 		expect(recallData.total).toBeGreaterThanOrEqual(1);
 
 		// 2. RESEARCH - investigate a topic
-		const research = await dispatcher.dispatch("research", { topic: "Pi coding agent architecture", depth: "deep" }, ctx);
+		const research = await dispatcher.dispatch(
+			"research",
+			{ topic: "Pi coding agent architecture", depth: "deep" },
+			ctx,
+		);
 		expect(research.verb).toBe("research");
 		expect(research.target).toBe("researcher");
-		const researchData = research.result as { synthesis: string; citations: unknown[]; query_plan: string[] };
+		const researchData = research.result as {
+			synthesis: string;
+			citations: unknown[];
+			query_plan: string[];
+		};
 		expect(researchData.synthesis.length).toBeGreaterThan(0);
 		expect(researchData.query_plan.length).toBeGreaterThan(3); // deep = 5 queries
 
@@ -439,18 +610,35 @@ describe("E2E: All 8 verbs end-to-end", () => {
 		expect(monitor.target).toBe("cve-monitor");
 
 		// 5. JOURNAL - write and read
-		await dispatcher.dispatch("journal", {
-			action: "write",
-			entry: { wins: ["tested all verbs"], blockers: [], mood_score: 5, mood_text: "excellent", energy_score: 5, energy_text: "peak", remember_tomorrow: "ship it", weekly_review_flag: false },
-		}, ctx);
+		await dispatcher.dispatch(
+			"journal",
+			{
+				action: "write",
+				entry: {
+					wins: ["tested all verbs"],
+					blockers: [],
+					mood_score: 5,
+					mood_text: "excellent",
+					energy_score: 5,
+					energy_text: "peak",
+					remember_tomorrow: "ship it",
+					weekly_review_flag: false,
+				},
+			},
+			ctx,
+		);
 		const journalRead = await dispatcher.dispatch("journal", { action: "read" }, ctx);
 		expect((journalRead.result as { wins: string[] }).wins).toContain("tested all verbs");
 
 		// 6. PRODUCE - generate content with SEO score
-		const produce = await dispatcher.dispatch("produce", {
-			kind: "blog-post",
-			prompt: "Building autonomous agents with persistent memory is the future of personal AI. ".repeat(20) + "What will you build?",
-		}, ctx);
+		const produce = await dispatcher.dispatch(
+			"produce",
+			{
+				kind: "blog-post",
+				prompt: `${"Building autonomous agents with persistent memory is the future of personal AI. ".repeat(20)}What will you build?`,
+			},
+			ctx,
+		);
 		expect(produce.verb).toBe("produce");
 		const produceData = produce.result as { seo_score: number };
 		expect(produceData.seo_score).toBeGreaterThan(0);
@@ -460,7 +648,11 @@ describe("E2E: All 8 verbs end-to-end", () => {
 		expect(dispatch.verb).toBe("dispatch");
 
 		// 8. NOTIFY - send notification (stub)
-		const notify = await dispatcher.dispatch("notify", { message: "All verbs tested successfully", severity: "info" }, ctx);
+		const notify = await dispatcher.dispatch(
+			"notify",
+			{ message: "All verbs tested successfully", severity: "info" },
+			ctx,
+		);
 		expect(notify.verb).toBe("notify");
 
 		closeProject(project);
@@ -469,8 +661,15 @@ describe("E2E: All 8 verbs end-to-end", () => {
 
 describe("E2E: Custom skill registration", () => {
 	const dirs: string[] = [];
-	function tmp() { const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-skills-")); dirs.push(d); return d; }
-	afterEach(() => { dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true })); dirs.length = 0; });
+	function tmp() {
+		const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-skills-"));
+		dirs.push(d);
+		return d;
+	}
+	afterEach(() => {
+		dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true }));
+		dirs.length = 0;
+	});
 
 	it("scenario: install a custom skill, verify it appears in routing table for its declared verb", () => {
 		const tmpDir = tmp();
@@ -479,22 +678,25 @@ describe("E2E: Custom skill registration", () => {
 		// Create a custom skill
 		const customSkillDir = path.join(skillsDir, "my-note-taker");
 		fs.mkdirSync(customSkillDir, { recursive: true });
-		fs.writeFileSync(path.join(customSkillDir, "SKILL.md"), [
-			"---",
-			"name: my-note-taker",
-			"description: Takes structured notes from conversations",
-			"mypensieve_exposes_via: recall",
-			"mypensieve_priority: 3",
-			"---",
-			"A custom note-taking skill that indexes conversation highlights.",
-		].join("\n"));
+		fs.writeFileSync(
+			path.join(customSkillDir, "SKILL.md"),
+			[
+				"---",
+				"name: my-note-taker",
+				"description: Takes structured notes from conversations",
+				"mypensieve_exposes_via: recall",
+				"mypensieve_priority: 3",
+				"---",
+				"A custom note-taking skill that indexes conversation highlights.",
+			].join("\n"),
+		);
 
 		// Scan and register
 		const registrations = scanSkillsForRegistration(skillsDir);
 		expect(registrations).toHaveLength(1);
-		expect(registrations[0]!.skillName).toBe("my-note-taker");
-		expect(registrations[0]!.verb).toBe("recall");
-		expect(registrations[0]!.priority).toBe(3);
+		expect(registrations[0]?.skillName).toBe("my-note-taker");
+		expect(registrations[0]?.verb).toBe("recall");
+		expect(registrations[0]?.priority).toBe(3);
 
 		// Apply to routing tables
 		const metaSkillsDir = path.join(tmpDir, "meta-skills");
@@ -506,8 +708,8 @@ describe("E2E: Custom skill registration", () => {
 		const recallTable = tables.get("recall")!;
 		const customRule = recallTable.rules.find((r) => r.target === "my-note-taker");
 		expect(customRule).toBeDefined();
-		expect(customRule!.priority).toBe(3);
-		expect(customRule!.name).toBe("custom:my-note-taker");
+		expect(customRule?.priority).toBe(3);
+		expect(customRule?.name).toBe("custom:my-note-taker");
 	});
 });
 
@@ -521,9 +723,15 @@ describe("E2E: Error handling pipeline", () => {
 		const surfaced: boolean[] = [];
 		for (let i = 0; i < 10; i++) {
 			const { shouldSurface } = dedup.record({
-				id: `err-${i}`, timestamp: new Date().toISOString(),
-				severity: "high", error_type: "mcp_crash", error_src: "cve-intel",
-				message: "Connection refused to OSV.dev API", context: {}, resolved: false, retry_count: i,
+				id: `err-${i}`,
+				timestamp: new Date().toISOString(),
+				severity: "high",
+				error_type: "mcp_crash",
+				error_src: "cve-intel",
+				message: "Connection refused to OSV.dev API",
+				context: {},
+				resolved: false,
+				retry_count: i,
 			});
 			surfaced.push(shouldSurface);
 			breaker.recordFailure();
@@ -541,8 +749,8 @@ describe("E2E: Error handling pipeline", () => {
 		// Dedup shows suppressed summary
 		const summaries = dedup.getSuppressedSummaries();
 		expect(summaries).toHaveLength(1);
-		expect(summaries[0]!.count).toBe(10);
-		expect(summaries[0]!.error_src).toBe("cve-intel");
+		expect(summaries[0]?.count).toBe(10);
+		expect(summaries[0]?.error_src).toBe("cve-intel");
 
 		// Recovery: reset the circuit breaker
 		expect(registry.resetByName("mcp:cve-intel")).toBe(true);
@@ -554,8 +762,15 @@ describe("E2E: Error handling pipeline", () => {
 
 describe("E2E: Backup & restore readiness", () => {
 	const dirs: string[] = [];
-	function tmp() { const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-backup-")); dirs.push(d); return d; }
-	afterEach(() => { dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true })); dirs.length = 0; });
+	function tmp() {
+		const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-backup-"));
+		dirs.push(d);
+		return d;
+	}
+	afterEach(() => {
+		dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true }));
+		dirs.length = 0;
+	});
 
 	it("scenario: create fake backups, prune old ones, verify recent kept", () => {
 		const backupDir = tmp();
@@ -564,9 +779,9 @@ describe("E2E: Backup & restore readiness", () => {
 		const files = [
 			{ name: "mypensieve-backup-2025-01-01T00-00-00.tar.gz", age: 400 }, // very old
 			{ name: "mypensieve-backup-2025-06-01T00-00-00.tar.gz", age: 200 }, // old
-			{ name: "mypensieve-backup-2026-03-01T00-00-00.tar.gz", age: 40 },  // over retention
-			{ name: "mypensieve-backup-2026-04-05T00-00-00.tar.gz", age: 5 },   // recent
-			{ name: "mypensieve-backup-2026-04-09T00-00-00.tar.gz", age: 1 },   // yesterday
+			{ name: "mypensieve-backup-2026-03-01T00-00-00.tar.gz", age: 40 }, // over retention
+			{ name: "mypensieve-backup-2026-04-05T00-00-00.tar.gz", age: 5 }, // recent
+			{ name: "mypensieve-backup-2026-04-09T00-00-00.tar.gz", age: 1 }, // yesterday
 		];
 
 		for (const f of files) {
@@ -590,8 +805,15 @@ describe("E2E: Backup & restore readiness", () => {
 
 describe("E2E: Security enforcement", () => {
 	const dirs: string[] = [];
-	function tmp() { const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-security-")); dirs.push(d); return d; }
-	afterEach(() => { dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true })); dirs.length = 0; });
+	function tmp() {
+		const d = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-security-"));
+		dirs.push(d);
+		return d;
+	}
+	afterEach(() => {
+		dirs.forEach((d) => fs.rmSync(d, { recursive: true, force: true }));
+		dirs.length = 0;
+	});
 
 	it("scenario: unauthorized Telegram peer gets rejected", () => {
 		const config = makeConfig();
@@ -628,7 +850,12 @@ describe("E2E: Security enforcement", () => {
 		const cliEnabled = makeConfig({
 			channels: {
 				cli: { enabled: true, tool_escape_hatch: true },
-				telegram: { enabled: true, tool_escape_hatch: false, allowed_peers: ["test"], allow_groups: false },
+				telegram: {
+					enabled: true,
+					tool_escape_hatch: false,
+					allowed_peers: ["test"],
+					allow_groups: false,
+				},
 			},
 		});
 		expect(cliEnabled.channels.cli.tool_escape_hatch).toBe(true);
@@ -655,12 +882,28 @@ describe("E2E: Security enforcement", () => {
 	it("scenario: gateway exposes exactly 8 verbs, no raw skill names", () => {
 		expect(VERB_NAMES).toHaveLength(8);
 		expect(VERB_NAMES).toEqual([
-			"recall", "research", "ingest", "monitor",
-			"journal", "produce", "dispatch", "notify",
+			"recall",
+			"research",
+			"ingest",
+			"monitor",
+			"journal",
+			"produce",
+			"dispatch",
+			"notify",
 		]);
 
 		// No skill names in the verb list
-		const skillNames = ["daily-log", "memory-recall", "researcher", "cve-monitor", "blog-seo", "playwright-cli", "image-edit", "video-edit", "audio-edit"];
+		const skillNames = [
+			"daily-log",
+			"memory-recall",
+			"researcher",
+			"cve-monitor",
+			"blog-seo",
+			"playwright-cli",
+			"image-edit",
+			"video-edit",
+			"audio-edit",
+		];
 		for (const skill of skillNames) {
 			expect(VERB_NAMES).not.toContain(skill);
 		}
@@ -700,7 +943,7 @@ describe("E2E: MCP configuration", () => {
 describe("E2E: Agent team & model assignment", () => {
 	it("scenario: default install has 1 agent, 4 available, all models unset", () => {
 		expect(DEFAULT_AGENTS).toHaveLength(1);
-		expect(DEFAULT_AGENTS[0]!.name).toBe("orchestrator");
+		expect(DEFAULT_AGENTS[0]?.name).toBe("orchestrator");
 
 		expect(AVAILABLE_AGENTS).toHaveLength(4);
 
@@ -713,10 +956,14 @@ describe("E2E: Agent team & model assignment", () => {
 	it("scenario: operator assigns models, resolveAgentModel picks them up", () => {
 		const custom = AVAILABLE_AGENTS.map((a) => ({
 			...a,
-			model: a.name === "orchestrator" ? "ollama-cloud/nemotron-3-super"
-				: a.name === "researcher" ? "openrouter/minimax-m2.7"
-				: a.name === "critic" ? "openrouter/kimi-k2"
-				: "anthropic/claude-sonnet-4-6",
+			model:
+				a.name === "orchestrator"
+					? "ollama-cloud/nemotron-3-super"
+					: a.name === "researcher"
+						? "openrouter/minimax-m2.7"
+						: a.name === "critic"
+							? "openrouter/kimi-k2"
+							: "anthropic/claude-sonnet-4-6",
 		}));
 
 		expect(resolveAgentModel(custom[0]!)).toBe("ollama-cloud/nemotron-3-super");
@@ -739,9 +986,7 @@ describe("E2E: Agent team & model assignment", () => {
 describe("E2E: Telegram message handling", () => {
 	it("scenario: long response gets chunked for Telegram's 4096 limit", () => {
 		// Simulate a long research response
-		const longResponse = "## Research Findings\n\n" +
-			"SQLite is a C library that provides a lightweight, disk-based database. ".repeat(100) +
-			"\n\n## Recommendations\n\n- Use SQLite for MVP\n- Consider alternatives for v2";
+		const longResponse = `## Research Findings\n\n${"SQLite is a C library that provides a lightweight, disk-based database. ".repeat(100)}\n\n## Recommendations\n\n- Use SQLite for MVP\n- Consider alternatives for v2`;
 
 		const chunks = chunkMessage(longResponse);
 

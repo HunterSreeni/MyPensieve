@@ -1,27 +1,27 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-	VERB_NAMES,
-	VERB_SCHEMAS,
-	READ_VERBS,
-	WRITE_VERBS,
-	LLM_ROUTED_VERB,
-	RecallArgsSchema,
-	ResearchArgsSchema,
-	DispatchArgsSchema,
-	NotifyArgsSchema,
-	JournalArgsSchema,
-	ProduceArgsSchema,
-} from "../../src/gateway/verbs.js";
+	BindingValidationError,
+	isEscapeHatchAllowed,
+	validateChannelBinding,
+} from "../../src/gateway/binding-validator.js";
 import {
+	type RoutingTable,
 	RoutingTableSchema,
 	resolveRoute,
-	type RoutingTable,
 } from "../../src/gateway/routing-schema.js";
 import {
-	validateChannelBinding,
-	isEscapeHatchAllowed,
-	BindingValidationError,
-} from "../../src/gateway/binding-validator.js";
+	DispatchArgsSchema,
+	JournalArgsSchema,
+	LLM_ROUTED_VERB,
+	NotifyArgsSchema,
+	ProduceArgsSchema,
+	READ_VERBS,
+	RecallArgsSchema,
+	ResearchArgsSchema,
+	VERB_NAMES,
+	VERB_SCHEMAS,
+	WRITE_VERBS,
+} from "../../src/gateway/verbs.js";
 
 // --- Verb definitions ---
 

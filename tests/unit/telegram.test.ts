@@ -1,22 +1,40 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { PeerSessionManager, PeerNotAllowedError } from "../../src/channels/telegram/sessions.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { chunkMessage, toTelegramMarkdown } from "../../src/channels/telegram/formatter.js";
+import { PeerNotAllowedError, PeerSessionManager } from "../../src/channels/telegram/sessions.js";
 import type { Config } from "../../src/config/schema.js";
 
-function validConfig(allowedPeers: string[] = ["peer-123", "peer-a", "peer-b", "peer-old", "peer-active"]): Config {
+function validConfig(
+	allowedPeers: string[] = ["peer-123", "peer-a", "peer-b", "peer-old", "peer-active"],
+): Config {
 	return {
 		version: 1,
 		operator: { name: "Test", timezone: "UTC" },
 		tier_routing: { default: "ollama/llama3" },
 		embeddings: { enabled: false },
-		daily_log: { enabled: true, cron: "0 20 * * *", channel: "cli", auto_prompt_next_morning_if_missed: true },
-		backup: { enabled: true, cron: "30 2 * * *", retention_days: 30, destinations: [{ type: "local", path: "/tmp" }], include_secrets: false },
+		daily_log: {
+			enabled: true,
+			cron: "0 20 * * *",
+			channel: "cli",
+			auto_prompt_next_morning_if_missed: true,
+		},
+		backup: {
+			enabled: true,
+			cron: "30 2 * * *",
+			retention_days: 30,
+			destinations: [{ type: "local", path: "/tmp" }],
+			include_secrets: false,
+		},
 		channels: {
 			cli: { enabled: true, tool_escape_hatch: false },
-			telegram: { enabled: true, tool_escape_hatch: false, allowed_peers: allowedPeers, allow_groups: false },
+			telegram: {
+				enabled: true,
+				tool_escape_hatch: false,
+				allowed_peers: allowedPeers,
+				allow_groups: false,
+			},
 		},
 		extractor: { cron: "0 2 * * *" },
 	};
@@ -108,8 +126,11 @@ describe("PeerSessionManager", () => {
 
 		// Add a decision directly
 		session.project.decisions.addDecision({
-			sessionId: "s1", project: session.binding,
-			content: "Test decision via Telegram", confidence: 0.95, source: "manual",
+			sessionId: "s1",
+			project: session.binding,
+			content: "Test decision via Telegram",
+			confidence: 0.95,
+			source: "manual",
 		});
 
 		// Recall via dispatcher
@@ -128,8 +149,11 @@ describe("PeerSessionManager", () => {
 		const sessionB = manager.getOrCreate("peer-b");
 
 		sessionA.project.decisions.addDecision({
-			sessionId: "s1", project: sessionA.binding,
-			content: "Secret A only", confidence: 0.95, source: "manual",
+			sessionId: "s1",
+			project: sessionA.binding,
+			content: "Secret A only",
+			confidence: 0.95,
+			source: "manual",
 		});
 
 		// Query from peer B should not find peer A's data (different project dir)

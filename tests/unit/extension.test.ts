@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createMyPensieveExtension } from "../../src/core/extension.js";
-import { writeConfig } from "../../src/config/writer.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Config } from "../../src/config/schema.js";
+import { writeConfig } from "../../src/config/writer.js";
+import { createMyPensieveExtension } from "../../src/core/extension.js";
 
 function validConfig(): Config {
 	return {
@@ -126,15 +126,15 @@ describe("MyPensieve Extension", () => {
 	it("handles missing config gracefully on session_start", () => {
 		const { pi, fireEvent } = createMockPi();
 		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-		const factory = createMyPensieveExtension({ configPath: "/nonexistent/config.json", channelType: "cli" });
+		const factory = createMyPensieveExtension({
+			configPath: "/nonexistent/config.json",
+			channelType: "cli",
+		});
 		factory(pi as never);
 
 		// Should not throw, but should log error
 		fireEvent("session_start", { type: "session_start" });
-		expect(spy).toHaveBeenCalledWith(
-			expect.stringContaining("[mypensieve]"),
-			expect.any(String),
-		);
+		expect(spy).toHaveBeenCalledWith(expect.stringContaining("[mypensieve]"), expect.any(String));
 		spy.mockRestore();
 	});
 

@@ -1,13 +1,13 @@
-import { describe, it, expect, vi } from "vitest";
-import { GatewayDispatcher, GatewayDispatchError } from "../../src/gateway/dispatcher.js";
-import { DEFAULT_ROUTING_TABLES } from "../../src/gateway/routing-loader.js";
-import { VERB_NAMES, type VerbName } from "../../src/gateway/verbs.js";
+import { describe, expect, it, vi } from "vitest";
 import {
-	validateChannelBinding,
-	isEscapeHatchAllowed,
 	BindingValidationError,
+	isEscapeHatchAllowed,
+	validateChannelBinding,
 } from "../../src/gateway/binding-validator.js";
+import { GatewayDispatchError, GatewayDispatcher } from "../../src/gateway/dispatcher.js";
+import { DEFAULT_ROUTING_TABLES } from "../../src/gateway/routing-loader.js";
 import type { RoutingTable } from "../../src/gateway/routing-schema.js";
+import { VERB_NAMES, type VerbName } from "../../src/gateway/verbs.js";
 
 function makeRoutingTables(): Map<VerbName, RoutingTable> {
 	const tables = new Map<VerbName, RoutingTable>();
@@ -39,10 +39,14 @@ describe("Gateway security", () => {
 			const dispatcher = new GatewayDispatcher(makeRoutingTables(), mockExecutor);
 			// TypeScript prevents this at compile time, but test runtime
 			await expect(
-				dispatcher.dispatch("gh-cli" as VerbName, { query: "test" }, {
-					channelType: "cli",
-					project: "test",
-				}),
+				dispatcher.dispatch(
+					"gh-cli" as VerbName,
+					{ query: "test" },
+					{
+						channelType: "cli",
+						project: "test",
+					},
+				),
 			).rejects.toThrow();
 		});
 
@@ -141,11 +145,7 @@ describe("Gateway security", () => {
 
 			// The executor receives it as a plain string, not executable
 			dispatcher
-				.dispatch(
-					"recall",
-					{ query: "test" },
-					{ channelType: "cli", project: "test" },
-				)
+				.dispatch("recall", { query: "test" }, { channelType: "cli", project: "test" })
 				.then(() => {
 					expect(mockExecutor).toHaveBeenCalledWith(
 						"'; DROP TABLE decisions; --",
@@ -158,11 +158,13 @@ describe("Gateway security", () => {
 
 	describe("Dispatch confirmation", () => {
 		it("dispatch verb defaults confirm to true", async () => {
-			const trackingExecutor = vi.fn(async (_target: string, _type: string, args: Record<string, unknown>) => {
-				// Verify the args include confirm=true
-				expect(args.confirm).toBe(true);
-				return { success: true };
-			});
+			const trackingExecutor = vi.fn(
+				async (_target: string, _type: string, args: Record<string, unknown>) => {
+					// Verify the args include confirm=true
+					expect(args.confirm).toBe(true);
+					return { success: true };
+				},
+			);
 
 			const dispatcher = new GatewayDispatcher(makeRoutingTables(), trackingExecutor);
 			await dispatcher.dispatch(
