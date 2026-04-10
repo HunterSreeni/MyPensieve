@@ -39,7 +39,6 @@ Built on top of [Pi](https://github.com/badlogic/pi-mono) (`@mariozechner/pi-cod
 npm install -g mypensieve
 ```
 
-
 ### Setup
 
 ```bash
@@ -324,7 +323,7 @@ MyPensieve borrows selectively from many sources. Credit where it's due:
 |---------|----------------|------|
 | **Pi** (`@mariozechner/pi-coding-agent`) | The runtime foundation. Agent loop, providers, sessions, skills, extensions. MyPensieve is built on Pi. | [github.com/badlogic/pi-mono](https://github.com/badlogic/pi-mono) |
 | **mempalace** | Bitemporal triple-store schema, layered memory loader, source-lineage on records | [github.com/milla-jovovich/mempalace](https://github.com/milla-jovovich/mempalace) |
-| **open-claw** | Per-peer channel session scope, decoupled embedding model idea | [github.com/nicholasgriffintn/open-claw](https://github.com/nicholasgriffintn/open-claw) |
+| **OpenClaw** | Per-peer channel session scope, decoupled embedding model idea | [github.com/openclaw/openclaw](https://github.com/openclaw/openclaw) |
 | **AutoGen** | Council architecture - GroupChat, speaker selection, max_round | [github.com/microsoft/autogen](https://github.com/microsoft/autogen) |
 | **LangGraph Swarm** | Structured shared state channels (researchFindings, critiques, draft) | [github.com/langchain-ai/langgraph-swarm-py](https://github.com/langchain-ai/langgraph-swarm-py) |
 | **MetaGPT** | Pub/sub by role concept | [github.com/geekan/MetaGPT](https://github.com/geekan/MetaGPT) |
