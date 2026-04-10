@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import { INIT_PROGRESS_PATH } from "../config/paths.js";
 
 export interface WizardStep {
@@ -38,7 +39,7 @@ export function readProgress(): WizardProgress | null {
  * Save wizard progress after each step.
  */
 export function saveProgress(progress: WizardProgress): void {
-	const dir = require("node:path").dirname(INIT_PROGRESS_PATH);
+	const dir = path.dirname(INIT_PROGRESS_PATH);
 	fs.mkdirSync(dir, { recursive: true });
 	fs.writeFileSync(INIT_PROGRESS_PATH, JSON.stringify(progress, null, 2), "utf-8");
 }

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import type { ExtractorCheckpoint } from "./types.js";
 
 /**
@@ -31,7 +32,7 @@ export class CheckpointManager {
 	 * Atomic write (temp + rename).
 	 */
 	write(checkpoint: ExtractorCheckpoint): void {
-		fs.mkdirSync(require("node:path").dirname(this.checkpointPath), { recursive: true });
+		fs.mkdirSync(path.dirname(this.checkpointPath), { recursive: true });
 		const tmpPath = `${this.checkpointPath}.tmp`;
 		fs.writeFileSync(tmpPath, JSON.stringify(checkpoint, null, 2), "utf-8");
 		fs.renameSync(tmpPath, this.checkpointPath);

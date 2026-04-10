@@ -62,8 +62,11 @@ registerCommand({
 	name: "init",
 	description: "Run the install wizard",
 	usage: "mypensieve init [--restart]",
-	run: async (_args) => {
-		console.log("[Phase 9] Install wizard not yet implemented.");
+	run: async (args) => {
+		const { runWizard } = await import("../../wizard/framework.js");
+		const { createWizardSteps } = await import("../../wizard/steps.js");
+		const restart = args.includes("--restart");
+		await runWizard(createWizardSteps(), { restart });
 	},
 });
 
