@@ -7,7 +7,7 @@
     "node": ">=20.0.0"
   },
   "bin": {
-    "mypensieve": "./dist/cli/index.js"
+    "mypensieve": "dist/cli/index.js"
   },
   "files": [
     "dist/",
