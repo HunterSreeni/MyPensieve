@@ -27,40 +27,21 @@ Built on top of [Pi](https://github.com/badlogic/pi-mono) (`@mariozechner/pi-cod
 
 ---
 
-## Quick start
+## Status: Pre-release (v0.1.x)
 
-### Prerequisites
+**MyPensieve is in active development.** The core framework (memory, gateway, skills, tests) is complete, but the interactive experience is not ready yet. Provider integration and the install wizard require the [Pi re-audit](docs/architecture/PI-REAUDIT-CHECKLIST.md) (scheduled April 13, 2026) before they can be wired up.
 
-- Node.js >= 20
+**Do not install for production use.** Current npm versions are deprecated. Wait for v0.2.0.
 
-### Install
-
-```bash
-npm install -g mypensieve
-```
-
-### Setup
+### For developers / contributors
 
 ```bash
-mypensieve init
-```
-
-The wizard walks you through 9 steps: operator profile, model selection, per-agent model assignment, channel setup, and persona seeding.
-
-### Start a session
-
-```bash
-mypensieve start
-```
-
-### Other commands
-
-```bash
-mypensieve doctor       # healthcheck
-mypensieve errors       # view error log
-mypensieve log          # daily journal
-mypensieve deliberate   # council mode
-mypensieve --help       # all commands
+git clone https://github.com/HunterSreeni/MyPensieve.git
+cd MyPensieve
+npm install
+npm test          # 304 tests
+npm run build     # compile TypeScript
+node dist/cli/index.js --help
 ```
 
 ---
