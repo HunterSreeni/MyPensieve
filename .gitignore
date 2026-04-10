@@ -26,4 +26,7 @@ Thumbs.db
 # Temp files
 *.tmp
 *.log
+
+# Local-only files (not committed)
 .claude/settings.local.json
+RELEASE-NOTES.md
