@@ -1,8 +1,10 @@
 # MyPensieve
 
 [![npm version](https://img.shields.io/npm/v/mypensieve)](https://www.npmjs.com/package/mypensieve)
+[![npm downloads](https://img.shields.io/npm/dm/mypensieve)](https://www.npmjs.com/package/mypensieve)
+[![CI](https://github.com/HunterSreeni/MyPensieve/actions/workflows/ci.yml/badge.svg)](https://github.com/HunterSreeni/MyPensieve/actions/workflows/ci.yml)
+[![GitHub stars](https://img.shields.io/github/stars/HunterSreeni/MyPensieve)](https://github.com/HunterSreeni/MyPensieve/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-304%20passing-brightgreen)]()
 
 A general-purpose, self-evolving autonomous agent OS with persistent memory across sessions.
 
