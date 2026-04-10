@@ -55,8 +55,11 @@ export function clearProgress(): void {
 /**
  * Run the wizard, optionally resuming from a previous attempt.
  */
-export async function runWizard(steps: WizardStep[], opts?: { restart?: boolean }): Promise<WizardState> {
-	let progress = opts?.restart ? null : readProgress();
+export async function runWizard(
+	steps: WizardStep[],
+	opts?: { restart?: boolean },
+): Promise<WizardState> {
+	const progress = opts?.restart ? null : readProgress();
 
 	const state: WizardState = {
 		config: progress?.state ?? {},
@@ -71,7 +74,8 @@ export async function runWizard(steps: WizardStep[], opts?: { restart?: boolean 
 	}
 
 	for (let i = startFrom; i < steps.length; i++) {
-		const step = steps[i]!;
+		const step = steps[i];
+		if (!step) continue;
 		console.log(`\n[Step ${i + 1}/${steps.length}] ${step.description}`);
 
 		await step.run(state);

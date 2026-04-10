@@ -1,7 +1,7 @@
-import type { WizardStep } from "./framework.js";
-import { scaffoldDirectories } from "../init/directories.js";
-import { writeConfig } from "../config/writer.js";
 import type { Config } from "../config/schema.js";
+import { writeConfig } from "../config/writer.js";
+import { scaffoldDirectories } from "../init/directories.js";
+import type { WizardStep } from "./framework.js";
 
 /**
  * All 9 wizard steps for `mypensieve init`.
@@ -16,7 +16,8 @@ export function createWizardSteps(): WizardStep[] {
 			run: async (state) => {
 				state.config.operator = {
 					name: (state.config.operator_name as string) ?? process.env.USER ?? "operator",
-					timezone: (state.config.timezone as string) ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+					timezone:
+						(state.config.timezone as string) ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
 				};
 				console.log(`  Operator: ${(state.config.operator as Record<string, string>).name}`);
 				console.log(`  Timezone: ${(state.config.operator as Record<string, string>).timezone}`);
@@ -43,7 +44,9 @@ export function createWizardSteps(): WizardStep[] {
 				const defaultModel = state.config.default_model as string | undefined;
 				if (!defaultModel && state.interactive) {
 					console.log("  [Interactive] Prompt operator for default model (provider/model format)");
-					console.log("  Examples: ollama-cloud/nemotron-3-super, anthropic/claude-sonnet-4-6, openrouter/kimi-k2");
+					console.log(
+						"  Examples: ollama-cloud/nemotron-3-super, anthropic/claude-sonnet-4-6, openrouter/kimi-k2",
+					);
 					// In real implementation: readline prompt here
 				}
 
@@ -68,8 +71,12 @@ export function createWizardSteps(): WizardStep[] {
 				const agentModels = state.config.agent_models as Record<string, string> | undefined;
 
 				if (!agentModels && state.interactive) {
-					console.log("  [Interactive] Ask: 'Use the default model for all agents, or assign per-agent?'");
-					console.log("  If per-agent: prompt for orchestrator, researcher, critic, devil-advocate models");
+					console.log(
+						"  [Interactive] Ask: 'Use the default model for all agents, or assign per-agent?'",
+					);
+					console.log(
+						"  If per-agent: prompt for orchestrator, researcher, critic, devil-advocate models",
+					);
 				}
 
 				if (agentModels) {
@@ -110,7 +117,9 @@ export function createWizardSteps(): WizardStep[] {
 				// MVP defaults to skip - persona builds organically
 				state.config.persona_mode = "skip";
 				console.log("  Persona mode: skip (builds organically from sessions)");
-				console.log("  Change via 'mypensieve config edit' - options: questionnaire, freeform, skip");
+				console.log(
+					"  Change via 'mypensieve config edit' - options: questionnaire, freeform, skip",
+				);
 			},
 		},
 		{
@@ -120,8 +129,12 @@ export function createWizardSteps(): WizardStep[] {
 				console.log("\n  Configuration summary:");
 				console.log(`    Operator: ${(state.config.operator as Record<string, string>).name}`);
 				console.log(`    Timezone: ${(state.config.operator as Record<string, string>).timezone}`);
-				console.log(`    Channels: CLI${(state.config.channels as Record<string, { enabled: boolean }>).telegram?.enabled ? " + Telegram" : ""}`);
-				console.log(`    Embeddings: ${(state.config.embeddings as { enabled: boolean }).enabled ? "enabled" : "disabled"}`);
+				console.log(
+					`    Channels: CLI${(state.config.channels as Record<string, { enabled: boolean }>).telegram?.enabled ? " + Telegram" : ""}`,
+				);
+				console.log(
+					`    Embeddings: ${(state.config.embeddings as { enabled: boolean }).enabled ? "enabled" : "disabled"}`,
+				);
 				console.log(`    Persona: ${state.config.persona_mode}`);
 			},
 		},

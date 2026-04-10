@@ -29,7 +29,7 @@ import { registerShutdownHandlers } from "./shutdown.js";
  */
 export async function startCliSession(opts?: { configPath?: string }): Promise<void> {
 	// Step 1: Load config
-	let config;
+	let config: import("../../config/schema.js").Config;
 	try {
 		config = readConfig(opts?.configPath);
 	} catch (err) {

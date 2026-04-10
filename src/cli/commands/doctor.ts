@@ -54,7 +54,7 @@ export function runDoctor(): void {
 					if (files.length === 0) {
 						checks.push({ name: "Backup", status: "warn", message: "No backup files found" });
 					} else {
-						const latest = files.sort().pop()!;
+						const latest = files.sort().pop() ?? "";
 						const stat = fs.statSync(`${backupPath}/${latest}`);
 						const ageMs = Date.now() - stat.mtimeMs;
 						const ageDays = ageMs / (1000 * 60 * 60 * 24);

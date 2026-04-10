@@ -162,8 +162,7 @@ export class PeerSessionManager {
 export class PeerNotAllowedError extends Error {
 	constructor(public readonly peerId: string) {
 		super(
-			`Telegram peer '${peerId}' is not in the allowed_peers list. ` +
-				"Add their Telegram user ID to config.channels.telegram.allowed_peers.",
+			`Telegram peer '${peerId}' is not in the allowed_peers list. Add their Telegram user ID to config.channels.telegram.allowed_peers.`,
 		);
 		this.name = "PeerNotAllowedError";
 	}

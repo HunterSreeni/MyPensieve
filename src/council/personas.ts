@@ -98,12 +98,7 @@ export const DEFAULT_AGENTS: AgentPersona[] = [ORCHESTRATOR];
 /**
  * All available agent personas (for `mypensieve agent add` menu).
  */
-export const AVAILABLE_AGENTS: AgentPersona[] = [
-	ORCHESTRATOR,
-	RESEARCHER,
-	CRITIC,
-	DEVIL_ADVOCATE,
-];
+export const AVAILABLE_AGENTS: AgentPersona[] = [ORCHESTRATOR, RESEARCHER, CRITIC, DEVIL_ADVOCATE];
 
 /**
  * Get an agent persona by name.
@@ -116,10 +111,7 @@ export function getAgentByName(name: string): AgentPersona | undefined {
  * Resolve which model an agent should use.
  * Priority: agent.model > tier_routing fallback from config.
  */
-export function resolveAgentModel(
-	agent: AgentPersona,
-	defaultModel?: string,
-): string {
+export function resolveAgentModel(agent: AgentPersona, defaultModel?: string): string {
 	if (agent.model) return agent.model;
 	return defaultModel ?? "not-configured";
 }
