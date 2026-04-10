@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import "./commands/index.js";
 import { dispatch } from "./router.js";
 
