@@ -42,11 +42,11 @@ export function choose(question: string, options: string[], defaultIndex = 0): P
 			console.log(`    ${marker} ${i + 1}. ${options[i]}`);
 		}
 		rl.question(`  Choice (1-${options.length}, default ${defaultIndex + 1}): `, (answer) => {
-			const idx = parseInt(answer.trim(), 10) - 1;
+			const idx = Number.parseInt(answer.trim(), 10) - 1;
 			if (idx >= 0 && idx < options.length) {
-				resolve(options[idx]!);
+				resolve(options[idx] ?? options[0] ?? "");
 			} else {
-				resolve(options[defaultIndex]!);
+				resolve(options[defaultIndex] ?? options[0] ?? "");
 			}
 		});
 	});

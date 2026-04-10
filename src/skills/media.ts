@@ -1,6 +1,16 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import type { SkillHandler } from "./executor.js";
+
+/** Safe ffmpeg execution - no shell interpolation */
+function ffmpeg(args: string[]): string {
+	return execFileSync("ffmpeg", args, { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+}
+
+/** Safe ffprobe execution - no shell interpolation */
+function ffprobe(args: string[]): string {
+	return execFileSync("ffprobe", args, { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+}
 
 /**
  * Image-edit skill.
@@ -92,7 +102,7 @@ export const videoEditHandler: SkillHandler = async (args, _ctx) => {
 
 	// Check ffmpeg availability
 	try {
-		execSync("ffmpeg -version", { stdio: "pipe" });
+		execFileSync("ffmpeg", ["-version"], { stdio: "pipe" });
 	} catch {
 		return {
 			success: false,
@@ -106,38 +116,37 @@ export const videoEditHandler: SkillHandler = async (args, _ctx) => {
 	try {
 		switch (operation) {
 			case "info": {
-				const info = execSync(
-					`ffprobe -v quiet -print_format json -show_format -show_streams "${source}"`,
-					{ encoding: "utf-8" },
-				);
+				const info = ffprobe([
+					"-v",
+					"quiet",
+					"-print_format",
+					"json",
+					"-show_format",
+					"-show_streams",
+					source,
+				]);
 				return { success: true, data: JSON.parse(info) };
 			}
 			case "convert": {
 				const format = (options?.format as string) ?? "mp4";
 				const out = outputPath ?? source.replace(/\.[^.]+$/, `.${format}`);
-				execSync(`ffmpeg -y -i "${source}" "${out}"`, { stdio: "pipe" });
+				ffmpeg(["-y", "-i", source, out]);
 				return { success: true, data: { output_path: out, operation: "convert" } };
 			}
 			case "trim": {
 				const start = (options?.start as string) ?? "00:00:00";
 				const duration = (options?.duration as string) ?? "00:00:10";
-				execSync(`ffmpeg -y -i "${source}" -ss ${start} -t ${duration} -c copy "${output}"`, {
-					stdio: "pipe",
-				});
+				ffmpeg(["-y", "-i", source, "-ss", start, "-t", duration, "-c", "copy", output]);
 				return { success: true, data: { output_path: output, operation: "trim" } };
 			}
 			case "extract-frame": {
 				const timestamp = (options?.timestamp as string) ?? "00:00:01";
 				const out = outputPath ?? source.replace(/\.[^.]+$/, "-frame.png");
-				execSync(`ffmpeg -y -i "${source}" -ss ${timestamp} -vframes 1 "${out}"`, {
-					stdio: "pipe",
-				});
+				ffmpeg(["-y", "-i", source, "-ss", timestamp, "-vframes", "1", out]);
 				return { success: true, data: { output_path: out, operation: "extract-frame" } };
 			}
 			case "strip-metadata": {
-				execSync(`ffmpeg -y -i "${source}" -map_metadata -1 -c copy "${output}"`, {
-					stdio: "pipe",
-				});
+				ffmpeg(["-y", "-i", source, "-map_metadata", "-1", "-c", "copy", output]);
 				return { success: true, data: { output_path: output, operation: "strip-metadata" } };
 			}
 			default:
@@ -185,7 +194,7 @@ export const audioEditHandler: SkillHandler = async (args, _ctx) => {
 
 	// Check ffmpeg availability
 	try {
-		execSync("ffmpeg -version", { stdio: "pipe" });
+		execFileSync("ffmpeg", ["-version"], { stdio: "pipe" });
 	} catch {
 		return {
 			success: false,
@@ -199,28 +208,31 @@ export const audioEditHandler: SkillHandler = async (args, _ctx) => {
 	try {
 		switch (operation) {
 			case "info": {
-				const info = execSync(
-					`ffprobe -v quiet -print_format json -show_format -show_streams "${source}"`,
-					{ encoding: "utf-8" },
-				);
+				const info = ffprobe([
+					"-v",
+					"quiet",
+					"-print_format",
+					"json",
+					"-show_format",
+					"-show_streams",
+					source,
+				]);
 				return { success: true, data: JSON.parse(info) };
 			}
 			case "convert": {
 				const format = (options?.format as string) ?? "mp3";
 				const out = outputPath ?? source.replace(/\.[^.]+$/, `.${format}`);
-				execSync(`ffmpeg -y -i "${source}" "${out}"`, { stdio: "pipe" });
+				ffmpeg(["-y", "-i", source, out]);
 				return { success: true, data: { output_path: out, operation: "convert" } };
 			}
 			case "trim": {
 				const start = (options?.start as string) ?? "00:00:00";
 				const duration = (options?.duration as string) ?? "00:00:10";
-				execSync(`ffmpeg -y -i "${source}" -ss ${start} -t ${duration} -c copy "${output}"`, {
-					stdio: "pipe",
-				});
+				ffmpeg(["-y", "-i", source, "-ss", start, "-t", duration, "-c", "copy", output]);
 				return { success: true, data: { output_path: output, operation: "trim" } };
 			}
 			case "normalize": {
-				execSync(`ffmpeg -y -i "${source}" -af loudnorm "${output}"`, { stdio: "pipe" });
+				ffmpeg(["-y", "-i", source, "-af", "loudnorm", output]);
 				return { success: true, data: { output_path: output, operation: "normalize" } };
 			}
 			default:

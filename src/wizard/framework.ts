@@ -74,23 +74,34 @@ export async function runWizard(
 		console.log(`\nResuming wizard from step ${startFrom + 1} of ${steps.length}...`);
 	}
 
-	for (let i = startFrom; i < steps.length; i++) {
-		const step = steps[i];
-		if (!step) continue;
-		console.log(`\n[Step ${i + 1}/${steps.length}] ${step.description}`);
+	try {
+		for (let i = startFrom; i < steps.length; i++) {
+			const step = steps[i];
+			if (!step) continue;
+			console.log(`\n[Step ${i + 1}/${steps.length}] ${step.description}`);
 
-		await step.run(state);
+			await step.run(state);
 
-		state.completedSteps.push(i);
-		saveProgress({
-			completedSteps: state.completedSteps,
-			state: state.config,
-			lastUpdated: new Date().toISOString(),
-		});
+			state.completedSteps.push(i);
+			saveProgress({
+				completedSteps: state.completedSteps,
+				state: state.config,
+				lastUpdated: new Date().toISOString(),
+			});
+		}
+
+		// Clean up progress file on completion
+		clearProgress();
+	} catch (err) {
+		// Ensure readline is closed on error
+		try {
+			const { closePrompt } = await import("./prompt.js");
+			closePrompt();
+		} catch {
+			// prompt module may not be loaded
+		}
+		throw err;
 	}
-
-	// Clean up progress file on completion
-	clearProgress();
 
 	return state;
 }

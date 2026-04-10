@@ -47,11 +47,11 @@ registerCommand({
 		const { CONFIG_PATH } = await import("../../config/paths.js");
 		const editor = process.env.EDITOR ?? process.env.VISUAL ?? "nano";
 		console.log(`Opening ${CONFIG_PATH} in ${editor}...`);
-		const { execSync } = await import("node:child_process");
+		const { execFileSync } = await import("node:child_process");
 		try {
-			execSync(`${editor} "${CONFIG_PATH}"`, { stdio: "inherit" });
+			execFileSync(editor, [CONFIG_PATH], { stdio: "inherit" });
 		} catch {
-			console.error(`Failed to open editor. Manually edit: ${CONFIG_PATH}`);
+			console.error(`Failed to open editor '${editor}'. Manually edit: ${CONFIG_PATH}`);
 		}
 	},
 });
@@ -75,7 +75,9 @@ registerCommand({
 	description: "Trigger the daily-log skill manually",
 	usage: "mypensieve log [--date YYYY-MM-DD]",
 	run: async (_args) => {
-		console.log("[Phase 5] Daily-log skill not yet implemented.");
+		console.log(
+			"Daily-log skill coming in v0.2.0. Use 'mypensieve start' for interactive sessions.",
+		);
 	},
 });
 
@@ -84,7 +86,7 @@ registerCommand({
 	description: "Run automated recovery actions for unresolved errors",
 	usage: "mypensieve recover [--reset-extractor]",
 	run: async (_args) => {
-		console.log("[Phase 7] Recovery engine not yet implemented.");
+		console.log("Recovery engine coming in v0.2.0.");
 	},
 });
 
@@ -95,10 +97,10 @@ registerCommand({
 	run: async (args) => {
 		const subcommand = args[0];
 		if (subcommand === "verify") {
-			console.log("[Phase 7] Backup verify not yet implemented.");
+			console.log("Backup verify coming in v0.2.0.");
 			return;
 		}
-		console.log("[Phase 7] Backup engine not yet implemented.");
+		console.log("Backup engine coming in v0.2.0.");
 	},
 });
 
@@ -113,7 +115,7 @@ registerCommand({
 			process.exitCode = 1;
 			return;
 		}
-		console.log(`[Phase 7] Restore not yet implemented. File: ${file}`);
+		console.log(`Restore coming in v0.2.0. Backup file: ${file}`);
 	},
 });
 
@@ -122,7 +124,7 @@ registerCommand({
 	description: "Trigger council mode for multi-agent deliberation",
 	usage: 'mypensieve deliberate "<topic>" [--agents name1,name2,name3]',
 	run: async (_args) => {
-		console.log("[Phase 8] Council mode not yet implemented.");
+		console.log("Council deliberation coming in v0.2.0.");
 	},
 });
 
@@ -137,7 +139,7 @@ registerCommand({
 			process.exitCode = 1;
 			return;
 		}
-		console.log(`[Phase 8] Agent management not yet implemented. Name: ${args[1]}`);
+		console.log(`Agent management coming in v0.2.0. Agent: ${args[1]}`);
 	},
 });
 
@@ -152,7 +154,7 @@ registerCommand({
 			process.exitCode = 1;
 			return;
 		}
-		console.log(`[Phase 5] Skill management not yet implemented. Name: ${args[1]}`);
+		console.log(`Skill management coming in v0.2.0. Skill: ${args[1]}`);
 	},
 });
 
@@ -161,6 +163,6 @@ registerCommand({
 	description: "Manually run the memory extractor on recent sessions",
 	usage: "mypensieve extract [--all]",
 	run: async (_args) => {
-		console.log("[Phase 3] Manual extractor not yet implemented.");
+		console.log("Manual extractor coming in v0.2.0.");
 	},
 });

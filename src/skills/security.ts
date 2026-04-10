@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { appendJsonl, readJsonlSync } from "../utils/jsonl.js";
@@ -41,11 +41,11 @@ async function checkPackages(
 	// Check if osv-scanner is available
 	const osvResults: CveAlert[] = [];
 	try {
-		execSync("osv-scanner --version", { stdio: "pipe" });
+		execFileSync("osv-scanner", ["--version"], { stdio: "pipe" });
 		const lockfile = scope ?? "package-lock.json";
 		if (fs.existsSync(lockfile)) {
 			try {
-				const output = execSync(`osv-scanner --json --lockfile="${lockfile}"`, {
+				const output = execFileSync("osv-scanner", ["--json", `--lockfile=${lockfile}`], {
 					encoding: "utf-8",
 					stdio: ["pipe", "pipe", "pipe"],
 				});
