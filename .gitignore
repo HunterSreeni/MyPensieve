@@ -1,0 +1,28 @@
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+
+# Secrets - never commit
+.env
+.secrets/
+**/auth.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Runtime data (created at ~/.mypensieve/, not in repo)
+*.db
+*.db-wal
+*.db-shm
+
+# Temp files
+*.tmp
+*.log
