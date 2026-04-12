@@ -12,6 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install build tools (for better-sqlite3)
+        run: sudo apt-get update && sudo apt-get install -y python3 make g++
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -31,14 +34,17 @@ jobs:
         run: npx vitest run
 
   publish:
-    name: Publish with provenance
+    name: Publish (Trusted Publishing + provenance)
     needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
+      id-token: write  # OIDC for npm Trusted Publishing
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install build tools (for better-sqlite3)
+        run: sudo apt-get update && sudo apt-get install -y python3 make g++
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -53,7 +59,8 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Publish with provenance
+      - name: Publish with provenance (Trusted Publishing - no token needed)
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # No NODE_AUTH_TOKEN / NPM_TOKEN needed!
+        # Authentication handled via OIDC + Trusted Publishing.
+        # Provenance attestation is auto-generated.
