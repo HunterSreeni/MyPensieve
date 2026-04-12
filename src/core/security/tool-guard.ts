@@ -12,9 +12,7 @@ import { checkBashCommand, checkReadAccess, checkWriteAccess } from "./guardrail
  * Create a beforeToolCall guard for the given working directory.
  */
 export function createToolGuard(cwd: string) {
-	return async (
-		context: BeforeToolCallContext,
-	): Promise<BeforeToolCallResult | undefined> => {
+	return async (context: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> => {
 		const toolName = context.toolCall.name;
 		const args = context.toolCall.arguments as Record<string, unknown>;
 
@@ -24,7 +22,7 @@ export function createToolGuard(cwd: string) {
 				if (!filePath) return undefined;
 				const result = checkReadAccess(filePath);
 				if (!result.allowed) {
-					logDenial(toolName, filePath, result.reason!);
+					logDenial(toolName, filePath, result.reason ?? "");
 					return { block: true, reason: result.reason };
 				}
 				break;
@@ -39,14 +37,14 @@ export function createToolGuard(cwd: string) {
 				if (toolName === "edit") {
 					const readResult = checkReadAccess(filePath);
 					if (!readResult.allowed) {
-						logDenial(toolName, filePath, readResult.reason!);
+						logDenial(toolName, filePath, readResult.reason ?? "");
 						return { block: true, reason: readResult.reason };
 					}
 				}
 
 				const writeResult = checkWriteAccess(filePath, cwd);
 				if (!writeResult.allowed) {
-					logDenial(toolName, filePath, writeResult.reason!);
+					logDenial(toolName, filePath, writeResult.reason ?? "");
 					return { block: true, reason: writeResult.reason };
 				}
 				break;
@@ -57,7 +55,7 @@ export function createToolGuard(cwd: string) {
 				if (!command) return undefined;
 				const result = checkBashCommand(command, cwd);
 				if (!result.allowed) {
-					logDenial(toolName, command.slice(0, 100), result.reason!);
+					logDenial(toolName, command.slice(0, 100), result.reason ?? "");
 					return { block: true, reason: result.reason };
 				}
 				break;

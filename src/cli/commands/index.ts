@@ -209,9 +209,11 @@ registerCommand({
 			return;
 		}
 		const os = process.platform;
-		console.log(`Daemon management coming in v0.2.0.`);
-		console.log(`Detected OS: ${os === "linux" ? "Linux (systemd)" : os === "darwin" ? "macOS (launchd)" : os}`);
-		console.log(`For now, use: mypensieve start  (in tmux/screen)`);
+		console.log("Daemon management coming in v0.2.0.");
+		console.log(
+			`Detected OS: ${os === "linux" ? "Linux (systemd)" : os === "darwin" ? "macOS (launchd)" : os}`,
+		);
+		console.log("For now, use: mypensieve start  (in tmux/screen)");
 	},
 });
 

@@ -40,7 +40,9 @@ describe("Filesystem guardrails", () => {
 		});
 
 		it("allows reading mypensieve secrets", () => {
-			expect(checkReadAccess(path.join(HOME, ".mypensieve/.secrets/telegram.json")).allowed).toBe(true);
+			expect(checkReadAccess(path.join(HOME, ".mypensieve/.secrets/telegram.json")).allowed).toBe(
+				true,
+			);
 		});
 	});
 
@@ -48,7 +50,9 @@ describe("Filesystem guardrails", () => {
 		const cwd = "/home/user/project";
 
 		it("allows writing to ~/.mypensieve/", () => {
-			expect(checkWriteAccess(path.join(HOME, ".mypensieve/persona/agent.md"), cwd).allowed).toBe(true);
+			expect(checkWriteAccess(path.join(HOME, ".mypensieve/persona/agent.md"), cwd).allowed).toBe(
+				true,
+			);
 		});
 
 		it("allows writing to project cwd", () => {

@@ -10,9 +10,9 @@ import {
 import { ConfigReadError, readConfig } from "../../config/index.js";
 import { PI_DIRS } from "../../config/paths.js";
 import { parseModelString, resolveDefaultModel } from "../../config/schema.js";
-import { validateChannelBinding } from "../../gateway/binding-validator.js";
 import { createToolGuard } from "../../core/security/tool-guard.js";
 import { savePersonaTool } from "../../core/tools/persona-tool.js";
+import { validateChannelBinding } from "../../gateway/binding-validator.js";
 import { isPersonaTemplate } from "../../init/persona-templates.js";
 import { captureError, withCapture } from "../../ops/index.js";
 import { getOllamaHost, registerOllamaProvider } from "../../providers/ollama.js";
@@ -155,8 +155,7 @@ export async function startCliSession(opts?: { configPath?: string }): Promise<v
 		const model = services.modelRegistry.find(provider, modelId);
 		if (!model) {
 			const err = new Error(
-				`Model ${provider}/${modelId} not found in registry after registration. ` +
-					"This is a bug in the Ollama provider registration.",
+				`Model ${provider}/${modelId} not found in registry after registration. This is a bug in the Ollama provider registration.`,
 			);
 			captureError({
 				severity: "critical",
@@ -170,9 +169,7 @@ export async function startCliSession(opts?: { configPath?: string }): Promise<v
 
 		// Include save_persona tool when persona hasn't been set or is still template-only
 		const needsPersona = !config.agent_persona || isPersonaTemplate();
-		const tools = needsPersona
-			? [...codingTools, savePersonaTool]
-			: codingTools;
+		const tools = needsPersona ? [...codingTools, savePersonaTool] : codingTools;
 
 		const created = await createAgentSessionFromServices({
 			services,

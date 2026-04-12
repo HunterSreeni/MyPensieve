@@ -143,7 +143,10 @@ export function registerOllamaProvider(
  * Render a user-facing error message with install/signin steps.
  * Used when the daemon probe fails or no cloud models are signed in.
  */
-export function renderOllamaSetupHelp(reason: "not-running" | "no-cloud-models", host: string): string {
+export function renderOllamaSetupHelp(
+	reason: "not-running" | "no-cloud-models",
+	host: string,
+): string {
 	if (reason === "not-running") {
 		return [
 			`  Ollama daemon is not reachable at ${host}.`,

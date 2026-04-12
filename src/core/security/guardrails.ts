@@ -147,9 +147,7 @@ export function checkWriteAccess(filePath: string, cwd: string): GuardrailResult
 
 	return {
 		allowed: false,
-		reason:
-			`Write denied: ${resolved} is outside allowed write locations. ` +
-			`Allowed: ~/.mypensieve/, project directory, /tmp/`,
+		reason: `Write denied: ${resolved} is outside allowed write locations. Allowed: ~/.mypensieve/, project directory, /tmp/`,
 	};
 }
 

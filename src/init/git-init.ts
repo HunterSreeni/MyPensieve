@@ -70,11 +70,10 @@ export function initGitRepo(): GitInitResult {
 
 		// Initial commit
 		execFileSync("git", ["add", "."], { cwd: DIRS.root, stdio: "pipe" });
-		execFileSync(
-			"git",
-			["commit", "-m", "Initialize MyPensieve data directory", "--allow-empty"],
-			{ cwd: DIRS.root, stdio: "pipe" },
-		);
+		execFileSync("git", ["commit", "-m", "Initialize MyPensieve data directory", "--allow-empty"], {
+			cwd: DIRS.root,
+			stdio: "pipe",
+		});
 
 		return { initialized: true, alreadyExists: false };
 	} catch (err) {
@@ -121,11 +120,10 @@ export function getRecentCommits(count = 5): string[] {
 	if (!fs.existsSync(gitDir)) return [];
 
 	try {
-		const log = execFileSync(
-			"git",
-			["log", `--oneline`, `-${count}`],
-			{ cwd: DIRS.root, encoding: "utf-8" },
-		);
+		const log = execFileSync("git", ["log", "--oneline", `-${count}`], {
+			cwd: DIRS.root,
+			encoding: "utf-8",
+		});
 		return log.trim().split("\n").filter(Boolean);
 	} catch {
 		return [];

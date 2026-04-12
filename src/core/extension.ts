@@ -1,11 +1,11 @@
 import type {
+	BeforeAgentStartEvent,
 	ExtensionAPI,
+	ExtensionContext,
 	ExtensionFactory,
 	SessionShutdownEvent,
 	SessionStartEvent,
 	TurnEndEvent,
-	BeforeAgentStartEvent,
-	ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
 
 // These types exist in Pi's extension types but aren't re-exported from the main package
@@ -28,12 +28,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { type Config, DIRS, readConfig } from "../config/index.js";
 import { OPERATOR_PERSONA_PATH } from "../config/paths.js";
-import { ECHOES_STATE_PATH } from "./scheduler/index.js";
 import { validateChannelBinding } from "../gateway/binding-validator.js";
 import { isOperatorTemplate, isPersonaTemplate } from "../init/persona-templates.js";
 import { captureError } from "../ops/index.js";
 import { appendJsonl } from "../utils/jsonl.js";
 import { PERSONA_BOOTSTRAP_PROMPT, buildPersonaSystemPrompt } from "./persona-bootstrap.js";
+import { ECHOES_STATE_PATH } from "./scheduler/index.js";
 
 /**
  * MyPensieve's main Pi extension factory.
@@ -99,78 +99,77 @@ export function createMyPensieveExtension(overrides?: {
 
 		// --- System Prompt Injection (before_agent_start) ---
 		// Fires before every LLM call. We append our persona/bootstrap to the system prompt.
-		pi.on(
-			"before_agent_start",
-			(_event: BeforeAgentStartEvent, _ctx: ExtensionContext) => {
-				if (!config) {
-					// If session_start hasn't fired yet, try loading config now
-					try {
-						config = readConfig(overrides?.configPath);
-					} catch {
-						return;
-					}
-				}
-
-				let personaBlock: string;
-
-				if (config.agent_persona && !isPersonaTemplate()) {
-					// Established persona - inject identity
-					personaBlock = buildPersonaSystemPrompt(
-						config.agent_persona.identity_prompt,
-						config.operator.name,
-					);
-				} else {
-					// No persona OR template-only - inject bootstrap prompt
-					personaBlock = PERSONA_BOOTSTRAP_PROMPT;
-				}
-
-				// Append operator persona if filled in
-				let operatorBlock = "";
-				if (!isOperatorTemplate() && fs.existsSync(OPERATOR_PERSONA_PATH)) {
-					const operatorPersona = fs.readFileSync(OPERATOR_PERSONA_PATH, "utf-8");
-					operatorBlock = `\n\n[Operator Persona]\n${operatorPersona}`;
-				}
-
-				// Operational context
-				const metaBlock = [
-					`\n\n[MyPensieve Context]`,
-					`Operator: ${config.operator.name}`,
-					`Timezone: ${config.operator.timezone}`,
-				].join("\n");
-
-				// Active echoes - read live state from disk (updated by EchoScheduler)
-				let echoBlock = "";
+		pi.on("before_agent_start", (_event: BeforeAgentStartEvent, _ctx: ExtensionContext) => {
+			if (!config) {
+				// If session_start hasn't fired yet, try loading config now
 				try {
-					if (fs.existsSync(ECHOES_STATE_PATH)) {
-						const raw = fs.readFileSync(ECHOES_STATE_PATH, "utf-8");
-						const echoes = JSON.parse(raw) as Array<{
-							name: string;
-							description: string;
-							cron: string;
-							nextRun: string | null;
-						}>;
-						if (echoes.length > 0) {
-							const lines = echoes.map((e) => {
-								const next = e.nextRun
-									? new Date(e.nextRun).toLocaleString("en-IN", { timeZone: config!.operator.timezone })
-									: "unknown";
-								return `- ${e.name}: ${e.description} (next: ${next})`;
-							});
-							echoBlock = `\n\n[Active Echoes - your scheduled tasks]\n${lines.join("\n")}\nNote: These are YOUR internal scheduled tasks, not system cron. You can list, add, or remove them.`;
-						}
-					}
+					config = readConfig(overrides?.configPath);
 				} catch {
-					// Non-critical - agent just won't see echoes this turn
+					return;
 				}
+			}
 
-				const injection = `${personaBlock}${operatorBlock}${metaBlock}${echoBlock}`;
+			let personaBlock: string;
 
-				// Append to Pi's existing system prompt
-				return {
-					systemPrompt: `${_event.systemPrompt}\n\n${injection}`,
-				};
-			},
-		);
+			if (config.agent_persona && !isPersonaTemplate()) {
+				// Established persona - inject identity
+				personaBlock = buildPersonaSystemPrompt(
+					config.agent_persona.identity_prompt,
+					config.operator.name,
+				);
+			} else {
+				// No persona OR template-only - inject bootstrap prompt
+				personaBlock = PERSONA_BOOTSTRAP_PROMPT;
+			}
+
+			// Append operator persona if filled in
+			let operatorBlock = "";
+			if (!isOperatorTemplate() && fs.existsSync(OPERATOR_PERSONA_PATH)) {
+				const operatorPersona = fs.readFileSync(OPERATOR_PERSONA_PATH, "utf-8");
+				operatorBlock = `\n\n[Operator Persona]\n${operatorPersona}`;
+			}
+
+			// Operational context
+			const metaBlock = [
+				"\n\n[MyPensieve Context]",
+				`Operator: ${config.operator.name}`,
+				`Timezone: ${config.operator.timezone}`,
+			].join("\n");
+
+			// Active echoes - read live state from disk (updated by EchoScheduler)
+			let echoBlock = "";
+			try {
+				if (fs.existsSync(ECHOES_STATE_PATH)) {
+					const raw = fs.readFileSync(ECHOES_STATE_PATH, "utf-8");
+					const echoes = JSON.parse(raw) as Array<{
+						name: string;
+						description: string;
+						cron: string;
+						nextRun: string | null;
+					}>;
+					if (echoes.length > 0) {
+						const lines = echoes.map((e) => {
+							const next = e.nextRun
+								? new Date(e.nextRun).toLocaleString("en-IN", {
+										timeZone: config?.operator.timezone,
+									})
+								: "unknown";
+							return `- ${e.name}: ${e.description} (next: ${next})`;
+						});
+						echoBlock = `\n\n[Active Echoes - your scheduled tasks]\n${lines.join("\n")}\nNote: These are YOUR internal scheduled tasks, not system cron. You can list, add, or remove them.`;
+					}
+				}
+			} catch {
+				// Non-critical - agent just won't see echoes this turn
+			}
+
+			const injection = `${personaBlock}${operatorBlock}${metaBlock}${echoBlock}`;
+
+			// Append to Pi's existing system prompt
+			return {
+				systemPrompt: `${_event.systemPrompt}\n\n${injection}`,
+			};
+		});
 
 		// --- Tool Execution Logging ---
 		// Logs what tools the agent calls (file reads, bash commands, etc.)

@@ -1,3 +1,4 @@
+import type { AgentTool } from "@mariozechner/pi-agent-core";
 /**
  * Custom Pi AgentTool: save_persona
  *
@@ -5,8 +6,7 @@
  * When no persona exists, the agent asks the user "who should I be?" and then
  * calls this tool to persist the identity to config.
  */
-import { Type, type Static } from "@sinclair/typebox";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import { type Static, Type } from "@sinclair/typebox";
 import { readConfig, writeConfig } from "../../config/index.js";
 import { CONFIG_PATH } from "../../config/paths.js";
 import { commitState } from "../../init/git-init.js";
@@ -14,8 +14,7 @@ import { writePersonaFile } from "../../init/persona-templates.js";
 
 const savePersonaSchema = Type.Object({
 	name: Type.String({
-		description:
-			"A short display name for the agent identity (e.g. 'Pensieve', 'Jarvis', 'Nova')",
+		description: "A short display name for the agent identity (e.g. 'Pensieve', 'Jarvis', 'Nova')",
 	}),
 	identity_prompt: Type.String({
 		description:
@@ -60,10 +59,7 @@ export const savePersonaTool: AgentTool<typeof savePersonaSchema> = {
 			content: [
 				{
 					type: "text",
-					text:
-						`Persona saved successfully. Agent name: "${params.name}". ` +
-						"This identity will be loaded on every future session. " +
-						"The operator can update it later with 'mypensieve persona edit'.",
+					text: `Persona saved successfully. Agent name: "${params.name}". This identity will be loaded on every future session. The operator can update it later with 'mypensieve persona edit'.`,
 				},
 			],
 			details: { name: params.name, saved: true },

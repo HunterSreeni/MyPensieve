@@ -45,8 +45,7 @@ export function installMyPensieveExtension(): InstallExtensionResult {
 			context: { targetPath, installerDir },
 		});
 		throw new ExtensionInstallError(
-			`Cannot locate MyPensieve extension factory at ${targetPath}. ` +
-				"Is MyPensieve installed correctly?",
+			`Cannot locate MyPensieve extension factory at ${targetPath}. Is MyPensieve installed correctly?`,
 		);
 	}
 

@@ -23,10 +23,7 @@ export interface WriteSecretResult {
  * Creates the secrets dir if missing. Atomic: writes to a temp file and
  * renames. Secrets dir is expected to already be scaffolded at mode 0700.
  */
-export function writeSecret(
-	filename: string,
-	data: Record<string, unknown>,
-): WriteSecretResult {
+export function writeSecret(filename: string, data: Record<string, unknown>): WriteSecretResult {
 	if (filename.includes("/") || filename.includes("\\") || filename.startsWith(".")) {
 		const err = new SecretsWriteError(`Invalid secret filename: ${filename}`);
 		captureError({

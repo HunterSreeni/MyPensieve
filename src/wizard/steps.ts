@@ -3,7 +3,11 @@ import { writeConfig } from "../config/writer.js";
 import { scaffoldDirectories } from "../init/directories.js";
 import { installMyPensieveExtension } from "../init/extension-installer.js";
 import { initGitRepo } from "../init/git-init.js";
-import { writeOperatorTemplate, writePersonaFile, writePersonaTemplate } from "../init/persona-templates.js";
+import {
+	writeOperatorTemplate,
+	writePersonaFile,
+	writePersonaTemplate,
+} from "../init/persona-templates.js";
 import { writeSecret } from "../init/secrets-writer.js";
 import { captureError } from "../ops/index.js";
 import {
@@ -32,9 +36,7 @@ export function createWizardSteps(): WizardStep[] {
 					`  Detected timezone: ${tzValid ? detectedTz : "(could not detect - will prompt)"}`,
 				);
 
-				const useDetected = tzValid
-					? await confirm("Use these values?", true)
-					: false;
+				const useDetected = tzValid ? await confirm("Use these values?", true) : false;
 
 				let name: string;
 				let timezone: string;
@@ -115,9 +117,7 @@ export function createWizardSteps(): WizardStep[] {
 				state.config.default_model = modelString;
 				state.config.tier_routing = { default: modelString };
 				console.log(`\n  Default model: ${modelString}`);
-				console.log(
-					`  Ollama host:   ${host} (set OLLAMA_HOST to override at runtime)`,
-				);
+				console.log(`  Ollama host:   ${host} (set OLLAMA_HOST to override at runtime)`);
 			},
 		},
 		{
@@ -187,9 +187,7 @@ export function createWizardSteps(): WizardStep[] {
 						context: { host, probeError: probe.error },
 					});
 					console.log(`  Probe failed: ${probe.error ?? "unknown error"}`);
-					console.log(
-						"  Skipping embeddings - you can enable later via 'mypensieve config edit'.",
-					);
+					console.log("  Skipping embeddings - you can enable later via 'mypensieve config edit'.");
 					state.config.embeddings = { enabled: false };
 					return;
 				}
@@ -253,10 +251,7 @@ export function createWizardSteps(): WizardStep[] {
 					console.log("         /setprivacy    -> Enable    (hides group messages from the bot)");
 					console.log("");
 
-					const token = await ask(
-						"Paste the bot token (or press Enter to skip and add later)",
-						"",
-					);
+					const token = await ask("Paste the bot token (or press Enter to skip and add later)", "");
 					if (token) {
 						const tokenOk = /^\d+:[A-Za-z0-9_-]{20,}$/.test(token);
 						if (!tokenOk) {
@@ -277,9 +272,7 @@ export function createWizardSteps(): WizardStep[] {
 							);
 						}
 					} else {
-						console.log(
-							"  No token provided. Telegram channel is enabled in config but won't",
-						);
+						console.log("  No token provided. Telegram channel is enabled in config but won't");
 						console.log(
 							"  actually connect until you add the token to ~/.mypensieve/.secrets/telegram.json",
 						);
@@ -294,15 +287,10 @@ export function createWizardSteps(): WizardStep[] {
 					console.log("    4. Anyone not in this allowlist will be rejected by the bot");
 					console.log("");
 
-					const peerId = await ask(
-						"Your Telegram user ID (numeric, or press Enter to skip)",
-						"",
-					);
+					const peerId = await ask("Your Telegram user ID (numeric, or press Enter to skip)", "");
 					if (peerId) {
 						if (!/^\d+$/.test(peerId)) {
-							console.log(
-								`  Warning: '${peerId}' doesn't look like a numeric Telegram ID.`,
-							);
+							console.log(`  Warning: '${peerId}' doesn't look like a numeric Telegram ID.`);
 							console.log("  Saving it anyway - you can edit later via 'mypensieve config edit'.");
 						}
 						(
@@ -310,9 +298,7 @@ export function createWizardSteps(): WizardStep[] {
 						).telegram.allowed_peers = [peerId];
 						console.log(`  Peer ${peerId} added to allowed list`);
 					} else {
-						console.log(
-							"  No peer added. Bot will reject ALL messages until you add your ID.",
-						);
+						console.log("  No peer added. Bot will reject ALL messages until you add your ID.");
 					}
 
 					// --- Step C: reminder summary ---
@@ -337,7 +323,7 @@ export function createWizardSteps(): WizardStep[] {
 					2,
 				);
 
-				let personaMode: PersonaMode = "skip";
+				const personaMode: PersonaMode = "skip";
 				if (mode.startsWith("Guided")) {
 					console.log("  [Questionnaire mode coming in v0.2.0]");
 					console.log("  Using skip for now - persona builds from sessions");
@@ -464,9 +450,7 @@ export function createWizardSteps(): WizardStep[] {
 					});
 					throw err;
 				}
-				console.log(
-					`  Pi extension bridge ${extInstall.action} at ${extInstall.bridgePath}`,
-				);
+				console.log(`  Pi extension bridge ${extInstall.action} at ${extInstall.bridgePath}`);
 
 				// Write persona templates (or real persona if defined in wizard)
 				const wizardPersona = state.config.agent_persona as AgentPersona | undefined;

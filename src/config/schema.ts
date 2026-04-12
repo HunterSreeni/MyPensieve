@@ -157,9 +157,7 @@ export type TierRouting = z.infer<typeof TierRoutingSchema>;
 export function resolveDefaultModel(config: Config): string {
 	const m = config.default_model ?? config.tier_routing.default;
 	if (!m || m === "not-configured") {
-		throw new Error(
-			"No default model configured. Run 'mypensieve init --restart' to set one.",
-		);
+		throw new Error("No default model configured. Run 'mypensieve init --restart' to set one.");
 	}
 	return m;
 }

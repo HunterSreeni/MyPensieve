@@ -20,10 +20,7 @@ export interface CaptureScope {
  * Use `captureError` directly when you want to log a failure without throwing
  * (e.g. non-fatal warnings).
  */
-export async function withCapture<T>(
-	scope: CaptureScope,
-	fn: () => Promise<T> | T,
-): Promise<T> {
+export async function withCapture<T>(scope: CaptureScope, fn: () => Promise<T> | T): Promise<T> {
 	try {
 		return await fn();
 	} catch (err) {

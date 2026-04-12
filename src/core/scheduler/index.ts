@@ -15,8 +15,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CronJob } from "cron";
-import type { Config } from "../../config/schema.js";
 import { DIRS } from "../../config/paths.js";
+import type { Config } from "../../config/schema.js";
 import { captureError } from "../../ops/index.js";
 
 /** Path to the echoes state file (read by the extension for prompt injection) */
@@ -116,17 +116,27 @@ export class EchoScheduler {
 	registerFromConfig(config: Config): void {
 		// Daily log
 		if (config.daily_log.enabled) {
-			this.register("daily-log", config.daily_log.cron, "Evening daily log prompt (6 questions)", () => {
-				// v0.2.0: trigger the daily-log skill
-				console.log("[echoes] Daily log triggered (skill not yet wired)");
-			});
+			this.register(
+				"daily-log",
+				config.daily_log.cron,
+				"Evening daily log prompt (6 questions)",
+				() => {
+					// v0.2.0: trigger the daily-log skill
+					console.log("[echoes] Daily log triggered (skill not yet wired)");
+				},
+			);
 		}
 
 		// Memory extractor
-		this.register("extractor", config.extractor.cron, "Nightly memory extraction from sessions", () => {
-			// v0.2.0: run the nightly memory extractor
-			console.log("[echoes] Extractor triggered (not yet wired)");
-		});
+		this.register(
+			"extractor",
+			config.extractor.cron,
+			"Nightly memory extraction from sessions",
+			() => {
+				// v0.2.0: run the nightly memory extractor
+				console.log("[echoes] Extractor triggered (not yet wired)");
+			},
+		);
 
 		// Backup
 		if (config.backup.enabled) {

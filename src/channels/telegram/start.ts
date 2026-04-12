@@ -8,7 +8,6 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { Bot } from "grammy";
 import {
 	AuthStorage,
 	SessionManager,
@@ -18,14 +17,15 @@ import {
 	createAgentSessionServices,
 } from "@mariozechner/pi-coding-agent";
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
+import { Bot } from "grammy";
 
 import { ConfigReadError, readConfig } from "../../config/index.js";
 import { PI_DIRS, SECRETS_DIR } from "../../config/paths.js";
 import { parseModelString, resolveDefaultModel } from "../../config/schema.js";
-import { validateChannelBinding } from "../../gateway/binding-validator.js";
 import { createToolGuard } from "../../core/security/tool-guard.js";
-import { isPersonaTemplate } from "../../init/persona-templates.js";
 import { savePersonaTool } from "../../core/tools/persona-tool.js";
+import { validateChannelBinding } from "../../gateway/binding-validator.js";
+import { isPersonaTemplate } from "../../init/persona-templates.js";
 import { captureError, withCapture } from "../../ops/index.js";
 import { getOllamaHost, registerOllamaProvider } from "../../providers/ollama.js";
 import { chunkMessage, toTelegramMarkdown } from "./formatter.js";
@@ -47,8 +47,7 @@ function readTelegramSecrets(): TelegramSecrets {
 
 	if (!fs.existsSync(secretsPath)) {
 		throw new Error(
-			`Telegram secrets not found at ${secretsPath}.\n` +
-				"Run 'mypensieve init --restart' and enable Telegram to set your bot token.",
+			`Telegram secrets not found at ${secretsPath}.\nRun 'mypensieve init --restart' and enable Telegram to set your bot token.`,
 		);
 	}
 
@@ -233,16 +232,12 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 
 			const model = services.modelRegistry.find(provider, modelId);
 			if (!model) {
-				throw new Error(
-					`Model ${provider}/${modelId} not found in registry after registration.`,
-				);
+				throw new Error(`Model ${provider}/${modelId} not found in registry after registration.`);
 			}
 
 			// Include save_persona tool when persona isn't set yet
 			const needsPersona = !config.agent_persona || isPersonaTemplate();
-			const tools = needsPersona
-				? [...codingTools, savePersonaTool]
-				: codingTools;
+			const tools = needsPersona ? [...codingTools, savePersonaTool] : codingTools;
 
 			const created = await createAgentSessionFromServices({
 				services,
@@ -349,14 +344,14 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 			}, 4000);
 
 			// Get or create session for this peer
-			console.log(`[telegram] Getting session...`);
+			console.log("[telegram] Getting session...");
 			const session = await getOrCreateSession(peerId);
-			console.log(`[telegram] Prompting agent...`);
+			console.log("[telegram] Prompting agent...");
 
 			// Send through AgentSession.prompt() which fires extension events
 			await session.prompt(text);
 			clearInterval(typingInterval);
-			console.log(`[telegram] Prompt done. Extracting...`);
+			console.log("[telegram] Prompt done. Extracting...");
 
 			// Extract the response
 			const response = extractResponseText(session);
@@ -385,7 +380,7 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 				context: { peerId, text: text.slice(0, 100) },
 			});
 			console.error(`[telegram] ERROR for ${peerId}:`, e.message);
-			console.error(`[telegram] Stack:`, e.stack?.slice(0, 300));
+			console.error("[telegram] Stack:", e.stack?.slice(0, 300));
 			try {
 				await ctx.reply("Something went wrong. Check the logs.");
 			} catch {
@@ -422,16 +417,19 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 	});
 
 	// Periodic cleanup of inactive sessions
-	const reapInterval = setInterval(() => {
-		const now = Date.now();
-		for (const [peerId, peer] of peerAgents) {
-			if (now - peer.lastActivity > SESSION_TIMEOUT_MS) {
-				peer.session.agent.reset();
-				peerAgents.delete(peerId);
-				console.log(`[telegram] Reaped inactive session for peer ${peerId}`);
+	const reapInterval = setInterval(
+		() => {
+			const now = Date.now();
+			for (const [peerId, peer] of peerAgents) {
+				if (now - peer.lastActivity > SESSION_TIMEOUT_MS) {
+					peer.session.agent.reset();
+					peerAgents.delete(peerId);
+					console.log(`[telegram] Reaped inactive session for peer ${peerId}`);
+				}
 			}
-		}
-	}, 5 * 60 * 1000); // Check every 5 minutes
+		},
+		5 * 60 * 1000,
+	); // Check every 5 minutes
 
 	// Graceful shutdown
 	let shuttingDown = false;

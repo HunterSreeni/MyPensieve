@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { commitState } from "../init/git-init.js";
 import { CONFIG_PATH } from "./paths.js";
 import { type Config, ConfigSchema } from "./schema.js";
-import { commitState } from "../init/git-init.js";
 
 export class ConfigWriteError extends Error {
 	constructor(
