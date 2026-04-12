@@ -1,0 +1,18 @@
+FROM node:20-slim
+
+# Simulate a fresh user
+RUN useradd -m testuser
+USER testuser
+WORKDIR /home/testuser
+
+# Copy the built package (we'll mount it)
+COPY --chown=testuser:testuser . /home/testuser/mypensieve/
+WORKDIR /home/testuser/mypensieve
+
+# Install deps
+RUN npm ci --ignore-scripts 2>/dev/null; npm rebuild better-sqlite3 2>/dev/null || true
+
+# The test: run init wizard in non-interactive mode won't work,
+# but we can test the scaffold and verify file structure.
+# For interactive testing, run with: docker run -it mypensieve-test bash
+CMD ["bash"]

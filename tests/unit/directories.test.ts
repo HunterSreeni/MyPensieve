@@ -17,6 +17,7 @@ vi.mock("../../src/config/paths.js", () => {
 		DIRS: {
 			root: mypensieveDir,
 			projects: path.join(mypensieveDir, "projects"),
+			persona: path.join(mypensieveDir, "persona"),
 			logs: path.join(mypensieveDir, "logs"),
 			logsErrors: path.join(mypensieveDir, "logs", "errors"),
 			logsCost: path.join(mypensieveDir, "logs", "cost"),
@@ -36,6 +37,8 @@ vi.mock("../../src/config/paths.js", () => {
 			auth: path.join(piDir, "auth.json"),
 		},
 		INIT_PROGRESS_PATH: path.join(mypensieveDir, ".init-progress.json"),
+		AGENT_PERSONA_PATH: path.join(mypensieveDir, "persona", "agent.md"),
+		OPERATOR_PERSONA_PATH: path.join(mypensieveDir, "persona", "operator.md"),
 	};
 });
 

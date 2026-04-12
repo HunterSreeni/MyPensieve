@@ -7,8 +7,47 @@ import { runErrors } from "./errors.js";
 
 registerCommand({
 	name: "start",
-	description: "Start an interactive CLI session",
+	description: "Start MyPensieve (always-on daemon: Telegram + scheduler)",
 	usage: "mypensieve start",
+	run: async (_args) => {
+		const { readConfig } = await import("../../config/index.js");
+		const { EchoScheduler } = await import("../../core/scheduler/index.js");
+		let config: import("../../config/schema.js").Config;
+		try {
+			config = readConfig();
+		} catch {
+			console.error("No config found. Run 'mypensieve init' first.");
+			process.exitCode = 1;
+			return;
+		}
+
+		// Boot echoes (in-process scheduled tasks, cross-OS)
+		const echoes = new EchoScheduler(config.operator.timezone);
+		echoes.registerFromConfig(config);
+
+		// Graceful shutdown for echoes
+		const shutdownEchoes = () => echoes.stopAll();
+		process.on("SIGINT", shutdownEchoes);
+		process.on("SIGTERM", shutdownEchoes);
+
+		if (!config.channels.telegram.enabled) {
+			console.log("[mypensieve] Telegram not enabled - running echoes only.");
+			console.log("[mypensieve] Use 'mypensieve cli' for interactive sessions.");
+			console.log("[mypensieve] Press Ctrl+C to stop.\n");
+			// Keep process alive for echoes
+			await new Promise(() => {});
+			return;
+		}
+
+		const { startTelegramListener } = await import("../../channels/telegram/start.js");
+		await startTelegramListener();
+	},
+});
+
+registerCommand({
+	name: "cli",
+	description: "Open an interactive CLI session (on-demand)",
+	usage: "mypensieve cli",
 	run: async (_args) => {
 		await startCliSession();
 	},
@@ -155,6 +194,24 @@ registerCommand({
 			return;
 		}
 		console.log(`Skill management coming in v0.2.0. Skill: ${args[1]}`);
+	},
+});
+
+registerCommand({
+	name: "daemon",
+	description: "Manage the always-on background service",
+	usage: "mypensieve daemon install|uninstall|status",
+	run: async (args) => {
+		const subcommand = args[0];
+		if (!subcommand || !["install", "uninstall", "status"].includes(subcommand)) {
+			console.error("Usage: mypensieve daemon install|uninstall|status");
+			process.exitCode = 1;
+			return;
+		}
+		const os = process.platform;
+		console.log(`Daemon management coming in v0.2.0.`);
+		console.log(`Detected OS: ${os === "linux" ? "Linux (systemd)" : os === "darwin" ? "macOS (launchd)" : os}`);
+		console.log(`For now, use: mypensieve start  (in tmux/screen)`);
 	},
 });
 

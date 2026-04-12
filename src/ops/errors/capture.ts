@@ -8,6 +8,18 @@ import type { ErrorRecord, Severity } from "./types.js";
 const dedup = new ErrorDedup();
 
 /**
+ * True when running under vitest. We avoid writing to the operator's real
+ * error log during test runs so tests that exercise error paths don't
+ * pollute ~/.mypensieve/logs/errors/ or poison dedup state across runs.
+ * Tests that need to verify captureError behavior should import from
+ * capture.ts directly and use the returned record.
+ */
+const isTestEnv =
+	process.env.VITEST === "true" ||
+	process.env.NODE_ENV === "test" ||
+	process.env.MYPENSIEVE_DISABLE_ERROR_LOG === "1";
+
+/**
  * Capture an error into the structured error log.
  * Returns { surfaced } indicating whether this error was surfaced to the operator
  * (vs suppressed by dedup).
@@ -33,12 +45,14 @@ export function captureError(opts: {
 		retry_count: 0,
 	};
 
-	// Always log
-	const date = record.timestamp.slice(0, 10);
-	const logPath = path.join(DIRS.logsErrors, `${date}.jsonl`);
-	appendJsonl(logPath, record);
+	// Log to disk unless running under vitest (see isTestEnv above).
+	if (!isTestEnv) {
+		const date = record.timestamp.slice(0, 10);
+		const logPath = path.join(DIRS.logsErrors, `${date}.jsonl`);
+		appendJsonl(logPath, record);
+	}
 
-	// Check dedup
+	// Check dedup (run in-memory even under tests so dedup logic stays testable)
 	const { shouldSurface } = dedup.record(record);
 
 	return { surfaced: shouldSurface, record };

@@ -1,0 +1,67 @@
+# MyPensieve - Known Limitations
+> Last updated: 2026-04-12
+
+These are honest disclaimers about what works, what doesn't, and what to expect.
+
+---
+
+## Response Latency
+
+- **Ollama Cloud models** (nemotron-3-super:cloud, etc.) route through Ollama's proxy to NVIDIA servers
+- Typical response time: **90-120 seconds per message** via Telegram
+- This is model/network latency, NOT a MyPensieve bug
+- Local models (if you have the VRAM) are significantly faster (~5-15s)
+- Telegram shows continuous "typing..." indicator while the agent thinks
+- CLI mode has the same latency but Pi's TUI shows streaming tokens
+
+## Model Dependency
+
+- Currently **only Ollama provider** is wired (v0.1.x)
+- Cloud models require `ollama signin` with an NVIDIA account
+- Local models require sufficient VRAM (7B = ~4GB, 13B = ~8GB, 70B = ~40GB)
+- No OpenRouter/Anthropic/OpenAI support yet (planned for v0.3.0)
+- Model quality varies - smaller models may not follow the persona prompt well
+
+## Platform Support
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Linux | Tested | Primary development platform |
+| macOS | Untested | Should work (same Unix paths/permissions) |
+| Windows | Untested | Paths work (os.homedir), but no chmod enforcement |
+
+- File permissions (chmod 0700/0444) only enforced on Linux/macOS
+- Daemon auto-start (systemd/launchd) not yet implemented (v0.2.0)
+- All scheduled tasks ("echoes") run in-process - no OS cron dependency
+
+## Telegram Channel
+
+- Uses **long-polling** (not webhooks) - simpler but slightly higher base latency
+- Bot must be running (`mypensieve start`) to receive messages
+- Messages sent while bot is offline queue on Telegram's side and deliver when bot restarts
+- No push notifications when bot is offline
+- Group messages blocked by default (security - prevents token burn from strangers)
+- Markdown formatting may occasionally fail (falls back to plain text)
+
+## Security Guardrails
+
+- Bash command filtering uses regex patterns - sophisticated evasion is theoretically possible
+- Write allow-list checks path prefixes, not symlink resolution
+- Read deny-list covers common sensitive paths but may miss obscure ones
+- These are **defense-in-depth**, not a security guarantee for untrusted inputs
+- The Telegram channel is the highest-risk surface (unattended, remote access)
+- Prompt injection via Telegram messages could potentially bypass persona instructions
+
+## Echoes (Scheduled Tasks)
+
+- Echoes only run while `mypensieve start` is running
+- If the process stops, no scheduled tasks fire until restarted
+- The daily-log, extractor, and backup echoes are registered but **not yet wired** to actual skills (v0.2.0)
+- Agent can report on echoes but cannot yet trigger them manually
+
+## Known Bugs / Rough Edges
+
+- Agent sometimes returns empty responses on Telegram (shows "(no response)")
+- The `save_persona` tool may not fire correctly if the model doesn't follow tool-use patterns
+- Extension's `before_agent_start` doesn't fire if Pi's internal session_start hasn't completed
+- Wizard TUI is basic readline (no arrow-key navigation) - upgrade planned for v0.4.0

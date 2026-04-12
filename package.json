@@ -15,6 +15,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "postinstall": "npm rebuild better-sqlite3 2>/dev/null || true",
     "build": "tsc && chmod +x dist/cli/index.js",
     "dev": "tsc --watch",
     "test": "vitest run",
@@ -40,14 +41,19 @@
     "@mariozechner/pi-ai": "0.66.1",
     "@mariozechner/pi-coding-agent": "0.66.1",
     "better-sqlite3": "11.10.0",
+    "cron": "^4.4.0",
+    "grammy": "^1.42.0",
     "yaml": "2.8.3",
     "zod": "3.25.76"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
     "@types/better-sqlite3": "^7.6.12",
+    "@types/cron": "^2.0.1",
     "@types/node": "^22.0.0",
     "@types/sharp": "^0.31.1",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "5.9.3",
     "vitest": "3.2.4"
   },

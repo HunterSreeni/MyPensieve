@@ -16,6 +16,7 @@ export const SECRETS_DIR = path.join(MYPENSIEVE_DIR, ".secrets");
 export const DIRS = {
 	root: MYPENSIEVE_DIR,
 	projects: path.join(MYPENSIEVE_DIR, "projects"),
+	persona: path.join(MYPENSIEVE_DIR, "persona"),
 	logs: path.join(MYPENSIEVE_DIR, "logs"),
 	logsErrors: path.join(MYPENSIEVE_DIR, "logs", "errors"),
 	logsCost: path.join(MYPENSIEVE_DIR, "logs", "cost"),
@@ -25,6 +26,12 @@ export const DIRS = {
 	secrets: SECRETS_DIR,
 	metaSkills: path.join(MYPENSIEVE_DIR, "meta-skills"),
 } as const;
+
+/** Agent persona file path */
+export const AGENT_PERSONA_PATH = path.join(MYPENSIEVE_DIR, "persona", "agent.md");
+
+/** Operator persona file path */
+export const OPERATOR_PERSONA_PATH = path.join(MYPENSIEVE_DIR, "persona", "operator.md");
 
 /** Wizard progress file for resumability */
 export const INIT_PROGRESS_PATH = path.join(MYPENSIEVE_DIR, ".init-progress.json");

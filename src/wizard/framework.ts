@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { INIT_PROGRESS_PATH } from "../config/paths.js";
+import { captureError } from "../ops/index.js";
 
 export interface WizardStep {
 	name: string;
@@ -74,13 +75,32 @@ export async function runWizard(
 		console.log(`\nResuming wizard from step ${startFrom + 1} of ${steps.length}...`);
 	}
 
+	let currentStepName: string | undefined;
 	try {
 		for (let i = startFrom; i < steps.length; i++) {
 			const step = steps[i];
 			if (!step) continue;
+			currentStepName = step.name;
 			console.log(`\n[Step ${i + 1}/${steps.length}] ${step.description}`);
 
-			await step.run(state);
+			try {
+				await step.run(state);
+			} catch (stepErr) {
+				const e = stepErr instanceof Error ? stepErr : new Error(String(stepErr));
+				captureError({
+					severity: "critical",
+					errorType: "wizard_step_failed",
+					errorSrc: `wizard:step:${step.name}`,
+					message: e.message,
+					stack: e.stack,
+					context: {
+						stepIndex: i,
+						stepName: step.name,
+						stepDescription: step.description,
+					},
+				});
+				throw stepErr;
+			}
 
 			state.completedSteps.push(i);
 			saveProgress({
@@ -99,6 +119,16 @@ export async function runWizard(
 			closePrompt();
 		} catch {
 			// prompt module may not be loaded
+		}
+		if (currentStepName === undefined) {
+			const e = err instanceof Error ? err : new Error(String(err));
+			captureError({
+				severity: "critical",
+				errorType: "wizard_framework",
+				errorSrc: "wizard:framework",
+				message: e.message,
+				stack: e.stack,
+			});
 		}
 		throw err;
 	}

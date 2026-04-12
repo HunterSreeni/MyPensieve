@@ -101,14 +101,14 @@ describe("MyPensieve Extension", () => {
 		fs.rmSync(tmpDir, { recursive: true, force: true });
 	});
 
-	it("registers handlers for session_start, context, turn_end, session_shutdown", () => {
+	it("registers handlers for session_start, before_agent_start, turn_end, session_shutdown", () => {
 		const { pi } = createMockPi();
 		const factory = createMyPensieveExtension({ configPath, channelType: "cli" });
 		factory(pi as never);
 
 		const registeredEvents = pi.on.mock.calls.map((c) => c[0]);
 		expect(registeredEvents).toContain("session_start");
-		expect(registeredEvents).toContain("context");
+		expect(registeredEvents).toContain("before_agent_start");
 		expect(registeredEvents).toContain("turn_end");
 		expect(registeredEvents).toContain("session_shutdown");
 	});
@@ -156,7 +156,7 @@ describe("MyPensieve Extension", () => {
 		spy.mockRestore();
 	});
 
-	it("returns context with operator info", () => {
+	it("injects persona into system prompt via before_agent_start", () => {
 		writeConfig(validConfig(), configPath);
 		const { pi, fireEvent } = createMockPi();
 		const factory = createMyPensieveExtension({ configPath, channelType: "cli" });
@@ -165,44 +165,57 @@ describe("MyPensieve Extension", () => {
 		// Fire session_start to load config
 		fireEvent("session_start", { type: "session_start" });
 
-		// Fire context event
-		const results = fireEvent("context", { type: "context", messages: [] }, {});
-		const contextResult = results[0] as { messages: Array<{ role: string; content: string }> };
-		expect(contextResult).toBeDefined();
-		expect(contextResult.messages).toHaveLength(1);
-		expect(contextResult.messages[0]?.content).toContain("TestUser");
-		expect(contextResult.messages[0]?.content).toContain("Asia/Kolkata");
-		expect(contextResult.messages[0]?.content).toContain("cli");
+		// Fire before_agent_start
+		const event = {
+			type: "before_agent_start",
+			prompt: "hello",
+			systemPrompt: "You are Pi.",
+		};
+		const results = fireEvent("before_agent_start", event, {});
+		const result = results[0] as { systemPrompt?: string } | undefined;
+
+		expect(result).toBeDefined();
+		expect(result?.systemPrompt).toContain("TestUser");
+		expect(result?.systemPrompt).toContain("Asia/Kolkata");
+		// Should preserve original system prompt
+		expect(result?.systemPrompt).toContain("You are Pi.");
 	});
 
-	it("context handler returns undefined when config not loaded", () => {
+	it("before_agent_start loads config if session_start missed", () => {
+		writeConfig(validConfig(), configPath);
 		const { pi, fireEvent } = createMockPi();
-		const factory = createMyPensieveExtension({ configPath: "/nonexistent", channelType: "cli" });
-
-		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const factory = createMyPensieveExtension({ configPath, channelType: "cli" });
 		factory(pi as never);
-		spy.mockRestore();
 
-		// Fire session_start (will fail to load config)
-		const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-		fireEvent("session_start", { type: "session_start" });
-		errSpy.mockRestore();
+		// Skip session_start, go straight to before_agent_start
+		const event = {
+			type: "before_agent_start",
+			prompt: "hello",
+			systemPrompt: "Base prompt.",
+		};
+		const results = fireEvent("before_agent_start", event, {});
+		const result = results[0] as { systemPrompt?: string } | undefined;
 
-		// Context should return undefined
-		const results = fireEvent("context", { type: "context", messages: [] }, {});
-		expect(results[0]).toBeUndefined();
+		expect(result).toBeDefined();
+		expect(result?.systemPrompt).toContain("TestUser");
 	});
 
-	it("defaults to cli channel type", () => {
+	it("defaults to cli channel type for validation", () => {
 		writeConfig(validConfig(), configPath);
 		const { pi, fireEvent } = createMockPi();
 		const factory = createMyPensieveExtension({ configPath });
 		factory(pi as never);
 
+		// session_start should pass validation for cli channel (default)
 		fireEvent("session_start", { type: "session_start" });
 
-		const results = fireEvent("context", { type: "context", messages: [] }, {});
-		const contextResult = results[0] as { messages: Array<{ content: string }> };
-		expect(contextResult.messages[0]?.content).toContain("cli");
+		const event = {
+			type: "before_agent_start",
+			prompt: "test",
+			systemPrompt: "",
+		};
+		const results = fireEvent("before_agent_start", event, {});
+		const result = results[0] as { systemPrompt?: string } | undefined;
+		expect(result?.systemPrompt).toContain("TestUser");
 	});
 });

@@ -1,31 +1,36 @@
+import {
+	AuthStorage,
+	InteractiveMode,
+	SessionManager,
+	codingTools,
+	createAgentSessionFromServices,
+	createAgentSessionRuntime,
+	createAgentSessionServices,
+} from "@mariozechner/pi-coding-agent";
 import { ConfigReadError, readConfig } from "../../config/index.js";
 import { PI_DIRS } from "../../config/paths.js";
-import { getProjectBinding } from "../../core/session.js";
+import { parseModelString, resolveDefaultModel } from "../../config/schema.js";
 import { validateChannelBinding } from "../../gateway/binding-validator.js";
-import { GatewayDispatcher, type SkillExecutor } from "../../gateway/dispatcher.js";
-import { loadAllRoutingTables } from "../../gateway/routing-loader.js";
-import {
-	applySkillRegistrations,
-	scanSkillsForRegistration,
-} from "../../gateway/skill-registration.js";
-import { loadProject } from "../../projects/loader.js";
-import { registerShutdownHandlers } from "./shutdown.js";
+import { createToolGuard } from "../../core/security/tool-guard.js";
+import { savePersonaTool } from "../../core/tools/persona-tool.js";
+import { isPersonaTemplate } from "../../init/persona-templates.js";
+import { captureError, withCapture } from "../../ops/index.js";
+import { getOllamaHost, registerOllamaProvider } from "../../providers/ollama.js";
 
 /**
  * Start an interactive CLI session.
  *
- * This is the main entry point for `mypensieve start`.
- * It:
- * 1. Loads and validates config
- * 2. Creates the project binding from cwd
- * 3. Loads the project state (memory layers, SQLite index)
- * 4. Sets up the gateway with routing tables + skill registrations
- * 5. Registers shutdown handlers
- * 6. Hands off to Pi's interactive session (Phase 1 integration)
+ * Wires MyPensieve config -> Pi agent runtime:
+ *   1. Load + validate MyPensieve config
+ *   2. Resolve the default model (currently Ollama Cloud only)
+ *   3. Build a Pi runtime factory that registers the Ollama provider on
+ *      the cwd-bound ModelRegistry before creating the session
+ *   4. Hand off to Pi's InteractiveMode for the TUI loop
  *
- * Note: Full Pi interactive mode integration requires Phase 1's
- * createMyPensieveSession. For now, this sets up everything except
- * the actual Pi TUI loop.
+ * The MyPensieve Pi extension bridge (installed by `mypensieve init`) is
+ * auto-discovered by Pi from ~/.pi/agent/extensions/mypensieve/, so session
+ * lifecycle hooks (session_start, context, turn_end, session_shutdown) fire
+ * automatically once the runtime starts.
  */
 export async function startCliSession(opts?: { configPath?: string }): Promise<void> {
 	// Step 1: Load config
@@ -33,6 +38,15 @@ export async function startCliSession(opts?: { configPath?: string }): Promise<v
 	try {
 		config = readConfig(opts?.configPath);
 	} catch (err) {
+		const e = err instanceof Error ? err : new Error(String(err));
+		captureError({
+			severity: "critical",
+			errorType: "config_read",
+			errorSrc: "start:config",
+			message: e.message,
+			stack: e.stack,
+			context: { configPath: opts?.configPath ?? "default" },
+		});
 		if (err instanceof ConfigReadError) {
 			console.error(err.message);
 			console.error("Run 'mypensieve init' to set up your configuration.");
@@ -46,65 +60,206 @@ export async function startCliSession(opts?: { configPath?: string }): Promise<v
 	try {
 		validateChannelBinding("cli", config.channels);
 	} catch (err) {
-		console.error("Channel validation failed:", err instanceof Error ? err.message : String(err));
+		const e = err instanceof Error ? err : new Error(String(err));
+		captureError({
+			severity: "critical",
+			errorType: "channel_validation",
+			errorSrc: "start:channel",
+			message: e.message,
+			stack: e.stack,
+			context: { channel: "cli" },
+		});
+		console.error("Channel validation failed:", e.message);
 		process.exitCode = 1;
 		return;
 	}
 
-	// Step 3: Project binding
+	// Step 3: Resolve the default model from config
+	let modelString: string;
+	let provider: string;
+	let modelId: string;
+	try {
+		modelString = resolveDefaultModel(config);
+		const parsed = parseModelString(modelString);
+		provider = parsed.provider;
+		modelId = parsed.modelId;
+	} catch (err) {
+		const e = err instanceof Error ? err : new Error(String(err));
+		captureError({
+			severity: "critical",
+			errorType: "model_resolution",
+			errorSrc: "start:model",
+			message: e.message,
+			stack: e.stack,
+			context: {
+				default_model: config.default_model,
+				tier_routing_default: config.tier_routing.default,
+			},
+		});
+		console.error(e.message);
+		process.exitCode = 1;
+		return;
+	}
+
+	if (provider !== "ollama") {
+		captureError({
+			severity: "high",
+			errorType: "provider_unsupported",
+			errorSrc: "start:model",
+			message: `Provider '${provider}' is not wired up yet`,
+			context: { provider, modelId, modelString },
+		});
+		console.error(
+			`Provider '${provider}' is not wired up yet. Only 'ollama' is supported in this build.`,
+		);
+		console.error("Run 'mypensieve init --restart' to pick an Ollama Cloud model.");
+		process.exitCode = 1;
+		return;
+	}
+
+	const ollamaHost = getOllamaHost();
+
+	// Step 4: Build Pi runtime factory.
+	// The factory runs once for the initial session and again on /new, /resume,
+	// /fork, etc. We register the Ollama provider on each services.modelRegistry
+	// instance before resolving the model and creating the session.
+	const authStorage = AuthStorage.create();
 	const cwd = process.cwd();
-	const binding = getProjectBinding("cli", cwd);
-	console.log(`[mypensieve] Project: ${binding}`);
+	const agentDir = PI_DIRS.root;
+	const sessionManager = SessionManager.create(cwd);
 
-	// Step 4: Load project state
-	const project = loadProject(binding);
-	console.log(
-		`[mypensieve] Memory index loaded (${project.index.getStats().decisions} decisions, ${project.index.getStats().threads} threads)`,
-	);
+	const createRuntime: Parameters<typeof createAgentSessionRuntime>[0] = async ({
+		cwd: runtimeCwd,
+		agentDir: runtimeAgentDir,
+		sessionManager: runtimeSessionManager,
+		sessionStartEvent,
+	}) => {
+		const services = await createAgentSessionServices({
+			cwd: runtimeCwd,
+			agentDir: runtimeAgentDir,
+			authStorage,
+		});
 
-	// Step 5: Load gateway
-	const routingTables = loadAllRoutingTables();
-	const skillRegistrations = scanSkillsForRegistration(PI_DIRS.skills);
-	applySkillRegistrations(routingTables, skillRegistrations);
+		await withCapture(
+			{
+				errorSrc: "start:register-ollama",
+				errorType: "provider_registration",
+				severity: "critical",
+				context: { host: ollamaHost, modelId },
+			},
+			async () => {
+				registerOllamaProvider(services.modelRegistry, ollamaHost, modelId);
+			},
+		);
 
-	// Create executor that routes to memory for recall, stubs for others
-	const executor: SkillExecutor = async (target, _type, args) => {
-		if (target === "memory-recall") {
-			return project.memoryQuery.recall({
-				query: args.query as string,
-				project: args.project as string | undefined,
-				layers: args.layers as
-					| Array<"decisions" | "threads" | "persona" | "semantic" | "raw">
-					| undefined,
-				limit: args.limit as number | undefined,
+		const model = services.modelRegistry.find(provider, modelId);
+		if (!model) {
+			const err = new Error(
+				`Model ${provider}/${modelId} not found in registry after registration. ` +
+					"This is a bug in the Ollama provider registration.",
+			);
+			captureError({
+				severity: "critical",
+				errorType: "model_not_found",
+				errorSrc: "start:model-lookup",
+				message: err.message,
+				context: { provider, modelId },
 			});
+			throw err;
 		}
-		// Other skills will be implemented in Phase 5
-		return { status: "not_implemented", target, args };
+
+		// Include save_persona tool when persona hasn't been set or is still template-only
+		const needsPersona = !config.agent_persona || isPersonaTemplate();
+		const tools = needsPersona
+			? [...codingTools, savePersonaTool]
+			: codingTools;
+
+		const created = await createAgentSessionFromServices({
+			services,
+			sessionManager: runtimeSessionManager,
+			sessionStartEvent,
+			model,
+			tools,
+		});
+
+		// Surface extension load errors so the user sees broken bridges up front
+		// instead of silently losing lifecycle hooks. Matches Pi's own main loop.
+		const extensionErrors = services.resourceLoader
+			.getExtensions()
+			.errors.map(({ path: extPath, error }) => ({
+				type: "error" as const,
+				message: `Failed to load extension "${extPath}": ${error}`,
+			}));
+		const diagnostics = [...services.diagnostics, ...extensionErrors];
+
+		return { ...created, services, diagnostics };
 	};
 
-	// Dispatcher is ready for when Pi interactive mode is wired in
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	void new GatewayDispatcher(routingTables, executor);
+	// Step 5: Create the runtime
+	let runtime: Awaited<ReturnType<typeof createAgentSessionRuntime>>;
+	try {
+		runtime = await createAgentSessionRuntime(createRuntime, {
+			cwd,
+			agentDir,
+			sessionManager,
+		});
+	} catch (err) {
+		const e = err instanceof Error ? err : new Error(String(err));
+		captureError({
+			severity: "critical",
+			errorType: "runtime_creation",
+			errorSrc: "start:runtime",
+			message: e.message,
+			stack: e.stack,
+			context: { cwd, agentDir, host: ollamaHost, modelId },
+		});
+		console.error("[mypensieve] Failed to create agent runtime:", e.message);
+		process.exitCode = 1;
+		return;
+	}
 
-	// Step 6: Register shutdown handlers
-	registerShutdownHandlers(project, async () => {
-		// Phase 3: Run session-end extractor here
-		console.log("[mypensieve] Running session-end extraction...");
-		// Extractor implementation comes in Phase 5
+	for (const diag of runtime.diagnostics) {
+		const prefix =
+			diag.type === "error"
+				? "[mypensieve] ERROR:"
+				: diag.type === "warning"
+					? "[mypensieve] WARN:"
+					: "[mypensieve] INFO:";
+		console.error(prefix, diag.message);
+
+		const severity = diag.type === "error" ? "high" : diag.type === "warning" ? "medium" : "info";
+		captureError({
+			severity,
+			errorType: "runtime_diagnostic",
+			errorSrc: "start:diagnostic",
+			message: diag.message,
+			context: { diagType: diag.type },
+		});
+	}
+	if (runtime.diagnostics.some((d) => d.type === "error")) {
+		process.exitCode = 1;
+		return;
+	}
+
+	// Install filesystem security guardrails
+	runtime.session.agent.beforeToolCall = createToolGuard(cwd);
+
+	console.log(`[mypensieve] Model: ${modelString} via ${ollamaHost}`);
+	console.log("[mypensieve] Entering Pi interactive mode. Ctrl+C to exit.");
+
+	// Step 6: Hand off to Pi's interactive TUI.
+	// Any failure inside the TUI loop is captured before being re-thrown so we
+	// get a durable record even when Pi tears down the terminal.
+	const interactiveMode = new InteractiveMode(runtime, {
+		modelFallbackMessage: runtime.modelFallbackMessage,
 	});
-
-	console.log("[mypensieve] Session ready. Gateway active with 8 verbs.");
-	console.log("[mypensieve] Pi interactive mode integration pending (requires Pi session).");
-	console.log("[mypensieve] Press Ctrl+C to exit.");
-
-	// In full implementation, this is where we'd call:
-	//   const { session } = await createMyPensieveSession({ channelType: "cli", cwd });
-	//   await InteractiveMode.run(session, ...);
-	//
-	// For now, keep the process alive until interrupted
-	await new Promise<void>((resolve) => {
-		process.on("SIGINT", () => resolve());
-		process.on("SIGTERM", () => resolve());
-	});
+	await withCapture(
+		{
+			errorSrc: "start:interactive-mode",
+			errorType: "runtime_tui",
+			severity: "critical",
+			context: { modelString, host: ollamaHost },
+		},
+		() => interactiveMode.run(),
+	);
 }

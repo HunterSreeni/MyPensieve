@@ -161,9 +161,9 @@ describe("Wizard framework", () => {
 });
 
 describe("Wizard steps", () => {
-	it("creates 9 steps", () => {
+	it("creates 10 steps", () => {
 		const steps = createWizardSteps();
-		expect(steps).toHaveLength(9);
+		expect(steps).toHaveLength(10);
 	});
 
 	it("steps have correct names", () => {
@@ -177,6 +177,7 @@ describe("Wizard steps", () => {
 			"embeddings",
 			"channels",
 			"persona",
+			"agent_identity",
 			"review",
 			"initialize",
 		]);

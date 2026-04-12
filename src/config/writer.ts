@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { CONFIG_PATH } from "./paths.js";
 import { type Config, ConfigSchema } from "./schema.js";
+import { commitState } from "../init/git-init.js";
 
 export class ConfigWriteError extends Error {
 	constructor(
@@ -62,4 +63,7 @@ export function writeConfig(config: Config, configPath: string = CONFIG_PATH): v
 		if (err instanceof ConfigWriteError) throw err;
 		throw new ConfigWriteError(`Failed to write config to ${configPath}`, err);
 	}
+
+	// Auto-commit config changes (no-op if git not initialized)
+	commitState("config: update");
 }

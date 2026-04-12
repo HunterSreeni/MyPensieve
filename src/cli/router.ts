@@ -1,3 +1,5 @@
+import { captureError } from "../ops/index.js";
+
 export interface CommandHandler {
 	name: string;
 	description: string;
@@ -39,13 +41,33 @@ export async function dispatch(argv: string[]): Promise<void> {
 
 	const handler = getCommand(commandName);
 	if (!handler) {
+		captureError({
+			severity: "low",
+			errorType: "cli_unknown_command",
+			errorSrc: "cli:router",
+			message: `Unknown command: ${commandName}`,
+			context: { argv },
+		});
 		console.error(`Unknown command: ${commandName}`);
 		console.error(`Run 'mypensieve --help' for a list of commands.`);
 		process.exitCode = 1;
 		return;
 	}
 
-	await handler.run(argv.slice(1));
+	try {
+		await handler.run(argv.slice(1));
+	} catch (err) {
+		const e = err instanceof Error ? err : new Error(String(err));
+		captureError({
+			severity: "critical",
+			errorType: "cli_command_failed",
+			errorSrc: `cli:command:${commandName}`,
+			message: e.message,
+			stack: e.stack,
+			context: { command: commandName, args: argv.slice(1) },
+		});
+		throw err;
+	}
 }
 
 function printHelp(): void {

@@ -28,6 +28,7 @@ export function scaffoldDirectories(): ScaffoldResult {
 	const standardDirs = [
 		DIRS.root,
 		DIRS.projects,
+		DIRS.persona,
 		DIRS.logs,
 		DIRS.logsErrors,
 		DIRS.logsCost,
@@ -93,6 +94,7 @@ export function verifyDirectories(): { ok: boolean; issues: string[] } {
 	const allDirs = [
 		DIRS.root,
 		DIRS.projects,
+		DIRS.persona,
 		DIRS.logs,
 		DIRS.logsErrors,
 		DIRS.logsCost,
