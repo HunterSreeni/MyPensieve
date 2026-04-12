@@ -1,0 +1,67 @@
+name: Pi Version Check
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'  # Every Monday 8am UTC (1:30 PM IST)
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  check:
+    name: Check for Pi updates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check Pi version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CURRENT=$(node -e "console.log(require('./package.json').dependencies['@mariozechner/pi-coding-agent'])")
+          echo "Current Pi version: $CURRENT"
+
+          LATEST=$(npm view @mariozechner/pi-coding-agent version 2>/dev/null || echo "unknown")
+          echo "Latest Pi version: $LATEST"
+
+          if [ "$LATEST" = "unknown" ]; then
+            echo "Could not fetch latest version - npm registry may be down"
+            exit 0
+          fi
+
+          if [ "$CURRENT" != "$LATEST" ]; then
+            echo "Update available: $CURRENT -> $LATEST"
+
+            # Check if issue already exists
+            EXISTING=$(gh issue list --search "Pi update: $CURRENT -> $LATEST" --state open --json number -q '.[0].number' || echo "")
+            if [ -n "$EXISTING" ]; then
+              echo "Issue #$EXISTING already exists, skipping"
+              exit 0
+            fi
+
+            gh issue create \
+              --title "Pi update available: $CURRENT -> $LATEST" \
+              --label "dependencies" \
+              --body "A new version of @mariozechner/pi-coding-agent is available.
+
+**Current:** $CURRENT
+**Latest:** $LATEST
+
+## Before upgrading:
+1. Read the Pi changelog/release notes
+2. Run \`scripts/pi-reaudit.sh\` against the new version
+3. Check for breaking changes in extension API
+4. Test all channels (CLI + Telegram)
+5. Update pinned version in package.json
+
+## Risk areas:
+- Extension event API (before_agent_start, tool_execution_start, etc.)
+- AgentSession.prompt() behavior
+- Tool definitions (codingTools interface)
+- Model registry API"
+          else
+            echo "Pi is up to date ($CURRENT)"
+          fi

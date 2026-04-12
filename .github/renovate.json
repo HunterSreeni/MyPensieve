@@ -1,0 +1,29 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "schedule": ["every weekend"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Production deps - PR only, human reviews",
+      "matchDepTypes": ["dependencies"],
+      "rangeStrategy": "pin",
+      "automerge": false
+    },
+    {
+      "description": "Dev deps - auto-merge if CI passes",
+      "matchDepTypes": ["devDependencies"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Pi packages - NEVER auto-update (requires re-audit)",
+      "matchPackageNames": [
+        "@mariozechner/pi-coding-agent",
+        "@mariozechner/pi-ai",
+        "@mariozechner/pi-agent-core"
+      ],
+      "enabled": false
+    }
+  ]
+}
