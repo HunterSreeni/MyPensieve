@@ -25,7 +25,8 @@
     "lint:fix": "biome check --write src/ tests/",
     "format": "biome format --write src/ tests/",
     "check": "biome check src/ tests/ && tsc --noEmit && vitest run",
-    "prepublishOnly": "npm run check && npm run build"
+    "prepublishOnly": "npm run check && npm run build",
+    "prepare": "husky"
   },
   "repository": {
     "type": "git",
@@ -52,10 +53,22 @@
     "@types/cron": "^2.0.1",
     "@types/node": "^22.0.0",
     "@types/sharp": "^0.31.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "5.9.3",
     "vitest": "3.2.4"
+  },
+  "lint-staged": {
+    "src/**/*.ts": [
+      "biome check --apply --no-errors-on-unmatched",
+      "biome format --write --no-errors-on-unmatched"
+    ],
+    "tests/**/*.ts": [
+      "biome check --apply --no-errors-on-unmatched",
+      "biome format --write --no-errors-on-unmatched"
+    ]
   },
   "keywords": [
     "agent",
