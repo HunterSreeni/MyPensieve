@@ -17,6 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install build tools (for better-sqlite3)
+        run: sudo apt-get update && sudo apt-get install -y python3 make g++
+
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
@@ -45,7 +48,7 @@ jobs:
         run: |
           OUTPUT=$(npx vitest run 2>&1)
           echo "$OUTPUT"
-          echo "$OUTPUT" | grep -q "304 passed" || (echo "FAIL: Expected 304 tests passing" && exit 1)
+          echo "$OUTPUT" | grep -q "329 passed" || (echo "FAIL: Expected 329 tests passing" && exit 1)
 
   build:
     name: Build
@@ -54,6 +57,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install build tools (for better-sqlite3)
+        run: sudo apt-get update && sudo apt-get install -y python3 make g++
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -79,6 +85,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install build tools (for better-sqlite3)
+        run: sudo apt-get update && sudo apt-get install -y python3 make g++
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

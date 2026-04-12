@@ -41,8 +41,8 @@
     "@mariozechner/pi-ai": "0.66.1",
     "@mariozechner/pi-coding-agent": "0.66.1",
     "better-sqlite3": "11.10.0",
-    "cron": "^4.4.0",
-    "grammy": "^1.42.0",
+    "cron": "4.4.0",
+    "grammy": "1.42.0",
     "yaml": "2.8.3",
     "zod": "3.25.76"
   },
