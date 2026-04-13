@@ -230,21 +230,31 @@ registerCommand({
 
 registerCommand({
 	name: "daemon",
-	description: "Manage the always-on background service",
+	description: "Manage the always-on background service (systemd)",
 	usage: "mypensieve daemon install|uninstall|status",
 	run: async (args) => {
 		const subcommand = args[0];
 		if (!subcommand || !["install", "uninstall", "status"].includes(subcommand)) {
 			console.error("Usage: mypensieve daemon install|uninstall|status");
+			console.error("");
+			console.error("  install    Create and start the systemd user service");
+			console.error("  uninstall  Stop and remove the service");
+			console.error("  status     Show service status and recent logs");
 			process.exitCode = 1;
 			return;
 		}
-		const os = process.platform;
-		console.log("Daemon management coming in v0.2.0.");
-		console.log(
-			`Detected OS: ${os === "linux" ? "Linux (systemd)" : os === "darwin" ? "macOS (launchd)" : os}`,
-		);
-		console.log("For now, use: mypensieve start  (in tmux/screen)");
+		const { installDaemon, uninstallDaemon, daemonStatus } = await import("./daemon.js");
+		switch (subcommand) {
+			case "install":
+				await installDaemon();
+				break;
+			case "uninstall":
+				await uninstallDaemon();
+				break;
+			case "status":
+				await daemonStatus();
+				break;
+		}
 	},
 });
 

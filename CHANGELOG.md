@@ -6,6 +6,23 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.14] - 2026-04-13
+
+Systemd daemon - MyPensieve runs as a persistent background service.
+
+### Added
+
+- **`mypensieve daemon install`**: Creates a systemd user service (`~/.config/systemd/user/mypensieve.service`) that runs `mypensieve start` as a background process. Auto-restarts on failure (5s delay). Starts on boot when loginctl linger is enabled. No sudo required.
+- **`mypensieve daemon uninstall`**: Stops and removes the systemd service cleanly.
+- **`mypensieve daemon status`**: Shows service state (active/inactive), enabled status, linger status, and last 5 log lines from journalctl.
+- **Security hardening in unit file**: `NoNewPrivileges=true`, `ProtectSystem=strict`, `PrivateTmp=true`, `ReadWritePaths` limited to `~/.mypensieve`.
+
+### Fixed
+
+- **Config privacy rule (Rule 8)**: Strengthened to explicitly prevent reading config.json with tools. Agent already has config values in its system prompt context.
+
+---
+
 ## [0.1.13] - 2026-04-13
 
 CLI improvements - version flag, status command, Ollama health check.
@@ -273,6 +290,7 @@ Initial MVP release - autonomous agent OS with persistent memory.
 
 ---
 
+[0.1.14]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.10...v0.1.11

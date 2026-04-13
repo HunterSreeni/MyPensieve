@@ -31,7 +31,7 @@ These are honest disclaimers about what works, what doesn't, and what to expect.
 | Windows | Untested | Paths work (os.homedir), but no chmod enforcement |
 
 - File permissions (chmod 0700/0444) only enforced on Linux/macOS
-- Daemon auto-start (systemd/launchd) not yet implemented (v0.2.0)
+- Daemon auto-start via `mypensieve daemon install` (Linux/systemd only, macOS launchd planned)
 - All scheduled tasks ("echoes") run in-process - no OS cron dependency
 
 ## Telegram Channel
