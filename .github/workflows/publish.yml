@@ -67,3 +67,38 @@ jobs:
         # No NODE_AUTH_TOKEN / NPM_TOKEN needed!
         # Authentication handled via OIDC + Trusted Publishing.
         # Provenance attestation is auto-generated.
+
+  publish-gpr:
+    name: Publish to GitHub Packages
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools (for better-sqlite3)
+        run: sudo apt-get update && sudo apt-get install -y python3 make g++
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@huntersreeni'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish to GitHub Packages
+        run: |
+          npm pkg set name="@huntersreeni/mypensieve"
+          npm pkg set publishConfig.registry="https://npm.pkg.github.com"
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
