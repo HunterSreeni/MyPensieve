@@ -55,15 +55,6 @@ export function createWizardSteps(): WizardStep[] {
 			},
 		},
 		{
-			name: "project",
-			description: "Default project directory",
-			run: async (state) => {
-				const defaultDir = process.cwd();
-				const dir = await ask("Default project directory", defaultDir);
-				state.config.default_project = dir;
-			},
-		},
-		{
 			name: "providers",
 			description: "AI Provider + Model setup (Ollama Cloud)",
 			run: async (state) => {

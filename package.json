@@ -1,6 +1,6 @@
 {
   "name": "mypensieve",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A general-purpose, self-evolving autonomous agent OS with persistent memory across sessions",
   "type": "module",
   "engines": {

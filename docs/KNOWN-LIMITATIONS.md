@@ -59,6 +59,13 @@ These are honest disclaimers about what works, what doesn't, and what to expect.
 - The daily-log, extractor, and backup echoes are registered but **not yet wired** to actual skills (v0.2.0)
 - Agent can report on echoes but cannot yet trigger them manually
 
+## Deprecated Transitive Dependencies (cosmetic warnings on install)
+
+- `prebuild-install@7.1.3` - from `better-sqlite3`. Still works, just unmaintained. Resolves when `better-sqlite3` drops it.
+- `node-domexception@1.0.0` - from Pi's `node-fetch`. Node 20+ has native DOMException. Resolves when Pi updates `node-fetch`.
+
+These are warnings, not errors. They don't affect functionality or security.
+
 ## Known Bugs / Rough Edges
 
 - Agent sometimes returns empty responses on Telegram (shows "(no response)")
