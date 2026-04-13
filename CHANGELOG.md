@@ -1,0 +1,150 @@
+# Changelog
+
+All notable changes to MyPensieve are documented here.
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [0.1.6] - 2026-04-13
+
+OWASP security hardening (Phase 1) + agent directory awareness.
+
+### Security
+
+- **Symlink path traversal fix (P1-01, P1-02)**: `checkReadAccess` and `checkWriteAccess` now use `fs.realpathSync()` instead of `path.resolve()`. Symlinks that point to denied targets (e.g. `/etc/shadow`, `~/.ssh/`) are now correctly blocked.
+- **Bash guardrail evasion hardening (P1-03)**: 15 new deny patterns - absolute path sudo (`/usr/bin/sudo`), split rm flags (`rm -r -f`, `rm -fr`), `find -delete`, `dd of=/dev/`, `eval`, python/perl/node/ruby subprocess escapes, download-then-execute chains.
+- **Redirect bypass fix (P1-06)**: Redirect regex now catches `>>` (append), `2>` (fd redirect), and `N>>` patterns. Added `tee`, `cp`, `mv`, `install`, `rsync`, `dd` targeting `/etc/` and `~/.ssh/` to deny patterns.
+- **Peer ID validation (P1-07)**: `allowed_peers` schema now uses `z.coerce.string().regex(/^\d+$/)` - auto-coerces numbers to strings, rejects non-numeric values like `"test-peer"`.
+- **Broadened .env deny pattern (P4-03)**: Changed from 3 specific patterns (`.env`, `.env.local`, `.env.production`) to catch-all `/\.env(\..+)?$/` covering all `.env.*` variants.
+- **Added /proc/ and /sys/ to read deny-list (P4-07)**: Blocks reading `/proc/self/environ` (env vars with secrets), `/proc/*/maps`, `/sys/` kernel parameters.
+
+### Added
+
+- **Agent directory awareness**: System prompt now includes the full MyPensieve directory layout so the agent knows where persona files, config, logs, and secrets live without searching the filesystem.
+- **61 new security audit tests** (`tests/unit/security-audit.test.ts`): Covers symlink traversal, bash evasion (16 vectors), redirect bypass (10 vectors), peer ID validation, path traversal regression, tool guard coverage, JSONL injection resistance, `.env` pattern completeness, `/proc/` and `/sys/` deny coverage.
+
+### Fixed
+
+- Test configs updated to use numeric peer IDs (required by new schema validation).
+
+---
+
+## [0.1.5] - 2026-04-13
+
+Wizard cleanup - removed dead project-folder step.
+
+### Removed
+
+- **"Default project directory" wizard step**: Was step 2/9 but the collected value was never saved to config or used anywhere. MyPensieve is a system-wide agent OS, not project-scoped. Wizard now has 8 steps instead of 9.
+
+### Added
+
+- Deprecated transitive dependencies section in `KNOWN-LIMITATIONS.md` documenting `prebuild-install` and `node-domexception` warnings.
+
+---
+
+## [0.1.4] - 2026-04-12
+
+Bug fixes, CI automation, and config migration layer.
+
+### Fixed
+
+- **Extension persona injection**: Use `before_agent_start` instead of broken context event, so persona/bootstrap prompt actually fires.
+- **Telegram session handling**: Use `AgentSession.prompt()` instead of `Agent.prompt()` so extension lifecycle events fire correctly.
+- **CI pipeline**: Sync lockfile, pin deps, add build tools for `better-sqlite3` native bindings.
+- **Lint errors**: Resolve all Biome lint errors across the codebase.
+- **Config migration**: Backward-compatible migration layer that auto-adds missing fields (`backup`, `tier_routing`) when loading older configs.
+
+### Added
+
+- **Renovate config**: Automated dependency PRs (dev deps auto-merge, prod deps PR-only, Pi packages disabled).
+- **Pi version watcher**: Weekly Monday cron workflow that creates a GitHub issue if a Pi update is available.
+- **Pre-commit hooks**: Husky + lint-staged for auto-lint on commit.
+- **Trusted Publishing**: npm publish via OIDC (no token needed), uses Node 24 for native npm 11+ support.
+
+---
+
+## [0.1.3] - 2026-04-10
+
+Security audit + UX polish.
+
+### Security
+
+- **Command injection fixes**: Replaced `execSync` string interpolation with `execFileSync` array args in `media.ts`, `security.ts`, and CLI editor.
+- **Safe ffmpeg/ffprobe wrappers**: No shell interpolation for media processing commands.
+
+### Fixed
+
+- Readline cleanup on wizard error/abort (no dangling stdin listeners).
+- Non-null assertions in wizard prompt replaced with proper defaults.
+
+### Changed
+
+- All 9 `"[Phase X] not yet implemented"` stub messages replaced with `"coming in v0.2.0"`.
+- Removed unused `execSync` imports.
+
+---
+
+## [0.1.2] - 2026-04-10
+
+Interactive wizard with real user prompts.
+
+### Added
+
+- **Readline-based prompt module**: `ask()`, `confirm()`, `choose()` functions for interactive terminal input.
+- All 9 wizard steps now wait for user input instead of using hardcoded defaults.
+- Model setup prompts for provider/model string and optional per-agent assignment.
+- Channel setup asks about Telegram, prompts for bot token and peer ID.
+- Persona mode selection: questionnaire, freeform, or skip.
+- Review step shows full config summary with confirmation before writing.
+- Abort support at review step.
+
+---
+
+## [0.1.1] - 2026-04-10
+
+Wired init command to wizard, fixed ESM module issues.
+
+### Fixed
+
+- `require("node:path")` replaced with `import path` in `checkpoint.ts` and `framework.ts` (ESM compatibility).
+
+### Added
+
+- `mypensieve init` now runs the full 9-step wizard (previously a stub).
+- `--restart` flag to start wizard from scratch, ignoring saved progress.
+
+---
+
+## [0.1.0] - 2026-04-10
+
+Initial MVP release - autonomous agent OS with persistent memory.
+
+### Added
+
+- **8-verb gateway**: `recall`, `research`, `ingest`, `monitor`, `journal`, `produce`, `dispatch`, `notify` - the agent's unified tool interface.
+- **5-layer cognitive memory**: Decisions, threads, persona, semantic, raw - with SQLite derived index and JSONL source of truth.
+- **9 custom skills**: daily-log, memory-recall, researcher, cve-monitor, blog-seo, playwright-cli, image/video/audio-edit.
+- **6 MCP configs**: datetime, playwright, duckduckgo-search, whisper-local, gh-cli, cve-intel.
+- **CLI + Telegram channels**: Interactive TUI for local use, Telegram bot with long-polling for remote access.
+- **Peer whitelisting**: Telegram channel restricted to explicit allowed peer IDs.
+- **Council mode**: 4 agents (orchestrator, researcher, critic, devil's advocate) with shared transcript and consensus tracking.
+- **Per-agent model assignment**: Any provider, any model, no hardcoded tiers.
+- **Error handling**: Error dedup, circuit breakers, structured error capture with redaction.
+- **Backup engine**: Configurable local/rsync backup with retention policy.
+- **9-step resumable install wizard**: Operator name, timezone detection, Ollama probing, model selection, channel config, persona seeding.
+- **Pi SDK integration**: Built on `@mariozechner/pi-coding-agent` v0.66.1.
+- **304 tests**: Unit, integration, and end-to-end test suites.
+- **GitHub CI/CD**: Test, build, lint, Snyk security audit on every push.
+- **npm package**: Published as `mypensieve` with provenance attestation.
+
+---
+
+[0.1.6]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/HunterSreeni/MyPensieve/releases/tag/v0.1.0
