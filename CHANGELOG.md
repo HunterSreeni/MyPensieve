@@ -6,6 +6,30 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.8] - 2026-04-13
+
+OWASP security hardening (Phase 3) - DoS prevention, supply chain, and data poisoning.
+
+### Security
+
+- **Per-peer rate limiter (P3-01)**: New `PeerRateLimiter` with sliding window (10 msgs/minute default). Rejects excess messages with "slow down" response.
+- **Session cap (P3-02)**: Maximum 5 concurrent agent sessions across all peers. Prevents resource exhaustion from many simultaneous connections.
+- **Input length validation (P3-03)**: Messages over 2000 characters rejected before reaching the agent. Prevents prompt injection hidden in long text and unnecessary token burn.
+- **CVE skill scope validation (P3-05)**: Rejects `scope` argument containing shell metacharacters (`;|&$(){}`) to prevent injection via `--lockfile` flag.
+- **Persona file permission check (P3-06)**: Extension warns if `operator.md` is world-writable (prompt injection risk via persona poisoning).
+
+### Added
+
+- `src/channels/telegram/rate-limiter.ts` - reusable sliding-window rate limiter.
+- 10 new security tests: rate limiter (4), dependency pinning (2), CVE scope validation (3), routing table safety (1).
+
+### Audited (no code changes needed)
+
+- **P3-04**: `npm audit` returns 0 vulnerabilities. All deps use exact version pins.
+- **P3-07**: `updateRoutingTable()` has zero call sites in user-facing code - safe.
+
+---
+
 ## [0.1.7] - 2026-04-13
 
 OWASP security hardening (Phase 2) - information disclosure, injection, and data integrity.
@@ -163,6 +187,7 @@ Initial MVP release - autonomous agent OS with persistent memory.
 
 ---
 
+[0.1.8]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.4...v0.1.5

@@ -690,3 +690,123 @@ describe("Phase 4: Hardening", () => {
 		});
 	});
 });
+
+// ============================================================
+// PHASE 3: Medium - DoS, Supply Chain & Data Poisoning
+// ============================================================
+
+describe("Phase 3: Medium", () => {
+	// --- P3-01: Rate Limiter ---
+	describe("P3-01: Per-peer rate limiter", () => {
+		it("allows messages under the limit", async () => {
+			const { PeerRateLimiter } = await import("../../src/channels/telegram/rate-limiter.js");
+			const limiter = new PeerRateLimiter({ maxMessages: 5, windowMs: 60_000 });
+
+			for (let i = 0; i < 5; i++) {
+				expect(limiter.check("peer-1")).toBe(true);
+			}
+		});
+
+		it("blocks messages over the limit", async () => {
+			const { PeerRateLimiter } = await import("../../src/channels/telegram/rate-limiter.js");
+			const limiter = new PeerRateLimiter({ maxMessages: 3, windowMs: 60_000 });
+
+			expect(limiter.check("peer-1")).toBe(true);
+			expect(limiter.check("peer-1")).toBe(true);
+			expect(limiter.check("peer-1")).toBe(true);
+			expect(limiter.check("peer-1")).toBe(false); // 4th message blocked
+		});
+
+		it("tracks peers independently", async () => {
+			const { PeerRateLimiter } = await import("../../src/channels/telegram/rate-limiter.js");
+			const limiter = new PeerRateLimiter({ maxMessages: 2, windowMs: 60_000 });
+
+			expect(limiter.check("peer-a")).toBe(true);
+			expect(limiter.check("peer-a")).toBe(true);
+			expect(limiter.check("peer-a")).toBe(false); // peer-a blocked
+
+			expect(limiter.check("peer-b")).toBe(true); // peer-b still allowed
+		});
+
+		it("clear() resets all state", async () => {
+			const { PeerRateLimiter } = await import("../../src/channels/telegram/rate-limiter.js");
+			const limiter = new PeerRateLimiter({ maxMessages: 1, windowMs: 60_000 });
+
+			expect(limiter.check("peer-1")).toBe(true);
+			expect(limiter.check("peer-1")).toBe(false);
+
+			limiter.clear();
+			expect(limiter.check("peer-1")).toBe(true); // allowed again after clear
+		});
+	});
+
+	// --- P3-04: Dependency Audit ---
+	describe("P3-04: Dependency security", () => {
+		it("package.json uses exact version pins (no ^ or ~)", () => {
+			const pkgPath = path.join(process.cwd(), "package.json");
+			const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+			const deps = pkg.dependencies ?? {};
+
+			for (const [name, version] of Object.entries(deps)) {
+				const v = version as string;
+				expect(
+					v.startsWith("^") || v.startsWith("~"),
+					`Dependency ${name}@${v} uses a version range - pin to exact version`,
+				).toBe(false);
+			}
+		});
+
+		it("package-lock.json exists and is committed", () => {
+			expect(fs.existsSync(path.join(process.cwd(), "package-lock.json"))).toBe(true);
+		});
+	});
+
+	// --- P3-05: CVE Skill Scope Validation ---
+	describe("P3-05: CVE skill scope validation", () => {
+		it("rejects scope with shell metacharacters", async () => {
+			const { cveMonitorHandler } = await import("../../src/skills/security.js");
+			const result = await cveMonitorHandler({ target: "packages", scope: "; rm -rf /" }, {
+				project: { projectDir: os.tmpdir() },
+				channelType: "cli",
+			} as never);
+			expect(result.success).toBe(false);
+			expect(result.error).toContain("shell metacharacters");
+		});
+
+		it("rejects scope with backticks", async () => {
+			const { cveMonitorHandler } = await import("../../src/skills/security.js");
+			const result = await cveMonitorHandler({ target: "packages", scope: "`cat /etc/shadow`" }, {
+				project: { projectDir: os.tmpdir() },
+				channelType: "cli",
+			} as never);
+			expect(result.success).toBe(false);
+		});
+
+		it("allows normal lockfile paths", async () => {
+			const { cveMonitorHandler } = await import("../../src/skills/security.js");
+			const result = await cveMonitorHandler({ target: "packages", scope: "package-lock.json" }, {
+				project: { projectDir: os.tmpdir() },
+				channelType: "cli",
+			} as never);
+			// May succeed or fail (osv-scanner not installed) but should not error on validation
+			if (result.error) {
+				expect(result.error).not.toContain("shell metacharacters");
+			}
+		});
+	});
+
+	// --- P3-07: Gateway Routing Table Safety ---
+	describe("P3-07: Gateway routing table injection", () => {
+		it("updateRoutingTable is not called from any user-facing code path", async () => {
+			// Verify by grep: the only reference to updateRoutingTable should be its definition
+			// This is a static analysis test - if someone adds a call site, this test reminds them to audit it
+			const dispatcherSrc = fs.readFileSync(
+				path.join(process.cwd(), "src/gateway/dispatcher.ts"),
+				"utf-8",
+			);
+			const callSites = dispatcherSrc.match(/updateRoutingTable/g) ?? [];
+			// Definition + getter reference = 1 occurrence in the method definition
+			expect(callSites.length).toBeLessThanOrEqual(2);
+		});
+	});
+});

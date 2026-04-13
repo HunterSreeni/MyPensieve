@@ -122,9 +122,20 @@ export function createMyPensieveExtension(overrides?: {
 				personaBlock = PERSONA_BOOTSTRAP_PROMPT;
 			}
 
-			// Append operator persona if filled in
+			// Append operator persona if filled in (with permission check)
 			let operatorBlock = "";
 			if (!isOperatorTemplate() && fs.existsSync(OPERATOR_PERSONA_PATH)) {
+				// Warn if persona file is world-writable (could be poisoned)
+				try {
+					const personaMode = fs.statSync(OPERATOR_PERSONA_PATH).mode & 0o777;
+					if ((personaMode & 0o002) !== 0) {
+						console.warn(
+							`[mypensieve] WARNING: Operator persona file is world-writable (mode ${personaMode.toString(8)}). This is a prompt injection risk. Run: chmod 644 ${OPERATOR_PERSONA_PATH}`,
+						);
+					}
+				} catch {
+					// stat failed - non-critical
+				}
 				const operatorPersona = fs.readFileSync(OPERATOR_PERSONA_PATH, "utf-8");
 				operatorBlock = `\n\n[Operator Persona]\n${operatorPersona}`;
 			}

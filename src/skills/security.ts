@@ -32,6 +32,12 @@ async function checkPackages(
 	ctx: { project: { projectDir: string } },
 ): Promise<{ success: boolean; data: unknown; error?: string }> {
 	const scope = args.scope as string | undefined;
+
+	// Validate scope to prevent path traversal in --lockfile arg
+	if (scope && /[;|&`$(){}]/.test(scope)) {
+		return { success: false, data: null, error: "Invalid scope: contains shell metacharacters" };
+	}
+
 	const lastCheckPath = path.join(ctx.project.projectDir, "cve-last-check.jsonl");
 
 	// Get previous findings

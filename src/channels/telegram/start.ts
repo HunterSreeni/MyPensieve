@@ -29,6 +29,12 @@ import { isPersonaTemplate } from "../../init/persona-templates.js";
 import { captureError, withCapture } from "../../ops/index.js";
 import { getOllamaHost, registerOllamaProvider } from "../../providers/ollama.js";
 import { chunkMessage, sanitizeOutput, toTelegramMarkdown } from "./formatter.js";
+import { PeerRateLimiter } from "./rate-limiter.js";
+
+/** Max message length accepted from Telegram (chars). */
+const MAX_INPUT_LENGTH = 2000;
+/** Max concurrent agent sessions across all peers. */
+const MAX_CONCURRENT_SESSIONS = 5;
 
 interface TelegramSecrets {
 	bot_token: string;
@@ -215,6 +221,7 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 	// Track active agent sessions per peer
 	const peerAgents = new Map<string, PeerAgent>();
 	const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 min inactivity
+	const rateLimiter = new PeerRateLimiter();
 
 	/**
 	 * Get or create a Pi agent session for a given peer.
@@ -356,6 +363,26 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 			return; // Silently ignore group messages
 		}
 
+		// Rate limit check
+		if (!rateLimiter.check(peerId)) {
+			await ctx.reply("Slow down - you're sending messages too fast. Try again in a minute.");
+			return;
+		}
+
+		// Input length check
+		if (text.length > MAX_INPUT_LENGTH) {
+			await ctx.reply(
+				`Message too long (${text.length} chars). Maximum is ${MAX_INPUT_LENGTH} characters.`,
+			);
+			return;
+		}
+
+		// Session cap check
+		if (!peerAgents.has(peerId) && peerAgents.size >= MAX_CONCURRENT_SESSIONS) {
+			await ctx.reply("Too many active sessions. Please try again later.");
+			return;
+		}
+
 		console.log(`[telegram] << ${peerId}: ${text.slice(0, 80)}`);
 
 		try {
@@ -466,6 +493,7 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 		console.log("\n[telegram] Shutting down... (Ctrl+C again to force)");
 		clearInterval(reapInterval);
 		bot.stop();
+		rateLimiter.clear();
 		for (const [, peer] of peerAgents) {
 			peer.session.agent.reset();
 		}
