@@ -68,7 +68,7 @@ These are warnings, not errors. They don't affect functionality or security.
 
 ## Known Bugs / Rough Edges
 
-- Agent sometimes returns empty responses on Telegram (shows "(no response)")
+- Agent may occasionally show tool output instead of a natural response (fallback when model skips text commentary)
 - The `save_persona` tool may not fire correctly if the model doesn't follow tool-use patterns
 - Extension's `before_agent_start` doesn't fire if Pi's internal session_start hasn't completed
 - Wizard TUI is basic readline (no arrow-key navigation) - upgrade planned for v0.4.0

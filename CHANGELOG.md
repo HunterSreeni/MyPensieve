@@ -6,6 +6,24 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.10] - 2026-04-13
+
+Fix "(no response)" bug + security hardening from black-box testing.
+
+### Fixed
+
+- **"(no response)" on Telegram**: `extractResponseText()` now falls back to tool result content when the agent responds with tool calls but no text commentary. Tool results are truncated to 1000 chars and prefixed with the tool name. Previously, any tool-only response showed "(no response)".
+
+### Security
+
+- **System prompt leakage hardening**: BB testing revealed "translate to French" leaked the agent persona. Security rules now explicitly cover ALL leakage vectors: translate, encode, paraphrase, summarize, reword.
+- **Secrets access hardening**: Agent was reading `.secrets/telegram.json` when asked (sanitizer caught it, but agent should refuse upfront). Rule 1 now says "do NOT read at all" instead of "refuse and explain".
+- **Rule 6 - Tool output**: Agent must ALWAYS include a text response after tool calls. Never respond with only tool calls and no text.
+- **Rule 7 - Sensitive output**: If a tool returns credentials, the agent must summarize without quoting sensitive values. Defense in depth with `sanitizeOutput()`.
+- All 5 security rules renumbered, marked MANDATORY, expanded to 7 rules.
+
+---
+
 ## [0.1.9] - 2026-04-13
 
 OWASP security hardening (Phase 4) - hardening, monitoring, and best practices. Completes the full audit.
@@ -208,6 +226,7 @@ Initial MVP release - autonomous agent OS with persistent memory.
 
 ---
 
+[0.1.10]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.6...v0.1.7

@@ -306,16 +306,25 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 		return session;
 	}
 
+	/** Max chars to include from a single tool result in fallback mode. */
+	const TOOL_RESULT_MAX_CHARS = 1000;
+
 	/**
 	 * Extract text content from agent messages after a prompt completes.
-	 * Scans backwards through all assistant messages to find any text response,
-	 * including cases where the agent used tools before/after responding.
+	 *
+	 * Priority:
+	 *   1. Text blocks from assistant messages (the agent's own words)
+	 *   2. Fallback: text from tool result messages (what the tools returned)
+	 *   3. Last resort: "(no response)"
+	 *
+	 * Tool results are truncated and prefixed so the user knows it's raw output.
 	 */
 	function extractResponseText(session: AgentSession): string {
 		const messages = session.agent.state.messages;
 		const textParts: string[] = [];
+		const toolResultParts: string[] = [];
 
-		// Walk backwards, collect text from assistant messages until we hit a user message
+		// Walk backwards, collect content until we hit a user message
 		for (let i = messages.length - 1; i >= 0; i--) {
 			const msg = messages[i];
 			if (!msg || !("role" in msg)) continue;
@@ -331,9 +340,35 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 					textParts.unshift(...parts);
 				}
 			}
+
+			// Collect tool results as fallback
+			if (msg.role === "toolResult" && "content" in msg) {
+				const toolName = (msg as { toolName?: string }).toolName ?? "tool";
+				const resultTexts = (msg.content as Array<{ type: string; text?: string }>)
+					.filter((c) => c.type === "text" && c.text)
+					.map((c) => {
+						const text = c.text as string;
+						return text.length > TOOL_RESULT_MAX_CHARS
+							? `${text.slice(0, TOOL_RESULT_MAX_CHARS)}... (truncated)`
+							: text;
+					});
+				if (resultTexts.length > 0) {
+					toolResultParts.unshift(`[${toolName} output]\n${resultTexts.join("\n")}`);
+				}
+			}
 		}
 
-		return textParts.length > 0 ? textParts.join("\n") : "(no response)";
+		// Prefer agent's own text response
+		if (textParts.length > 0) {
+			return textParts.join("\n");
+		}
+
+		// Fall back to tool results if agent gave no text commentary
+		if (toolResultParts.length > 0) {
+			return toolResultParts.join("\n\n");
+		}
+
+		return "(no response)";
 	}
 
 	// Step 7: Create grammy bot
