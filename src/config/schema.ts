@@ -91,8 +91,8 @@ export const ChannelConfigSchema = z.object({
 export const TelegramChannelConfigSchema = ChannelConfigSchema.extend({
 	// Telegram-specific: escape hatch is always false, enforced in validator
 	tool_escape_hatch: z.literal(false).default(false),
-	// Allowed Telegram user IDs. Empty = reject all. Operator must add their ID.
-	allowed_peers: z.array(z.string()).default([]),
+	// Allowed Telegram user IDs (numeric strings). Empty = reject all. Operator must add their ID.
+	allowed_peers: z.array(z.coerce.string().regex(/^\d+$/, "Peer ID must be numeric")).default([]),
 	// Disable group joins (BotFather /setjoingroups should also be disabled)
 	allow_groups: z.boolean().default(false),
 });

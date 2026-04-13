@@ -129,39 +129,10 @@ export function createMyPensieveExtension(overrides?: {
 				operatorBlock = `\n\n[Operator Persona]\n${operatorPersona}`;
 			}
 
-			// Operational context
-			const metaBlock = [
-				"\n\n[MyPensieve Context]",
-				`Operator: ${config.operator.name}`,
-				`Timezone: ${config.operator.timezone}`,
-			].join("\n");
+			// Operational context + directory layout
+			const metaBlock = buildMetaBlock(config);
 
-			// Active echoes - read live state from disk (updated by EchoScheduler)
-			let echoBlock = "";
-			try {
-				if (fs.existsSync(ECHOES_STATE_PATH)) {
-					const raw = fs.readFileSync(ECHOES_STATE_PATH, "utf-8");
-					const echoes = JSON.parse(raw) as Array<{
-						name: string;
-						description: string;
-						cron: string;
-						nextRun: string | null;
-					}>;
-					if (echoes.length > 0) {
-						const lines = echoes.map((e) => {
-							const next = e.nextRun
-								? new Date(e.nextRun).toLocaleString("en-IN", {
-										timeZone: config?.operator.timezone,
-									})
-								: "unknown";
-							return `- ${e.name}: ${e.description} (next: ${next})`;
-						});
-						echoBlock = `\n\n[Active Echoes - your scheduled tasks]\n${lines.join("\n")}\nNote: These are YOUR internal scheduled tasks, not system cron. You can list, add, or remove them.`;
-					}
-				}
-			} catch {
-				// Non-critical - agent just won't see echoes this turn
-			}
+			const echoBlock = buildEchoBlock(config.operator.timezone);
 
 			const injection = `${personaBlock}${operatorBlock}${metaBlock}${echoBlock}`;
 
@@ -220,6 +191,57 @@ export function createMyPensieveExtension(overrides?: {
 			logSessionEvent("session_shutdown", { channelType });
 		});
 	};
+}
+
+/**
+ * Read active echoes from disk and format as a system prompt block.
+ */
+function buildEchoBlock(timezone: string): string {
+	try {
+		if (!fs.existsSync(ECHOES_STATE_PATH)) return "";
+		const raw = fs.readFileSync(ECHOES_STATE_PATH, "utf-8");
+		const echoes = JSON.parse(raw) as Array<{
+			name: string;
+			description: string;
+			cron: string;
+			nextRun: string | null;
+		}>;
+		if (echoes.length === 0) return "";
+		const lines = echoes.map((e) => {
+			const next = e.nextRun
+				? new Date(e.nextRun).toLocaleString("en-IN", { timeZone: timezone })
+				: "unknown";
+			return `- ${e.name}: ${e.description} (next: ${next})`;
+		});
+		return `\n\n[Active Echoes - your scheduled tasks]\n${lines.join("\n")}\nNote: These are YOUR internal scheduled tasks, not system cron. You can list, add, or remove them.`;
+	} catch {
+		return "";
+	}
+}
+
+/**
+ * Build the operational context + directory layout block for the system prompt.
+ */
+function buildMetaBlock(config: Config): string {
+	return [
+		"\n\n[MyPensieve Context]",
+		`Operator: ${config.operator.name}`,
+		`Timezone: ${config.operator.timezone}`,
+		"",
+		"[MyPensieve Directory Layout]",
+		`Root: ${DIRS.root}`,
+		`Config: ${DIRS.root}/config.json (read-only)`,
+		"Persona files:",
+		`  - Agent identity: ${DIRS.persona}/agent.md (YOUR persona)`,
+		`  - Operator profile: ${DIRS.persona}/operator.md (info about the operator)`,
+		`Secrets: ${DIRS.secrets}/ (bot tokens, API keys)`,
+		`Logs: ${DIRS.logs}/ (events, tools, errors - daily JSONL files)`,
+		`Projects: ${DIRS.projects}/`,
+		`State: ${DIRS.state}/ (reminders, scheduler state)`,
+		"",
+		"You already know this layout - do not search the filesystem for these paths.",
+		"When asked about persona files, read them directly from the paths above.",
+	].join("\n");
 }
 
 /**

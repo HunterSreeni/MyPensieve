@@ -7,10 +7,16 @@
  *
  * These are enforced via Pi's beforeToolCall hook in the extension.
  */
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 const HOME = os.homedir();
+
+/** Escape special regex characters in a string for use in RegExp constructor. */
+function escapeRegex(s: string): string {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 // --- Read Deny-List ---
 // Patterns that should NEVER be read by the agent
@@ -35,6 +41,8 @@ const READ_DENY_PREFIXES = [
 	"/etc/sudoers.d/",
 	"/etc/pam.d/",
 	"/etc/security/",
+	"/proc/",
+	"/sys/",
 	path.join(HOME, ".ssh/"),
 	path.join(HOME, ".gnupg/"),
 	path.join(HOME, ".config/"),
@@ -49,9 +57,7 @@ const READ_DENY_PATTERNS = [
 	/id_ed25519/,
 	/id_ecdsa/,
 	/credentials\.json$/,
-	/\.env$/,
-	/\.env\.local$/,
-	/\.env\.production$/,
+	/\.env(\..+)?$/, // matches .env, .env.local, .env.production, .env.development, .env.staging, etc.
 ];
 
 // --- Write Allow-List ---
@@ -69,16 +75,52 @@ function getWriteAllowPrefixes(cwd: string): string[] {
 // Commands that should never be executed
 
 const BASH_DENY_PATTERNS = [
-	/\bsudo\b/,
-	/\bsu\b\s/,
+	// Privilege escalation - match both bare and absolute paths
+	/(?:^|[\s;|&])(?:\/usr\/bin\/|\/bin\/)?sudo\b/,
+	/(?:^|[\s;|&])(?:\/usr\/bin\/|\/bin\/)?su\s/,
+
+	// Destructive file operations
 	/\bchmod\s+777\b/,
 	/\bchown\b/,
-	/\brm\s+-rf\s+[/~]/,
+	/\brm\s+(-[a-zA-Z]*r[a-zA-Z]*\s+-[a-zA-Z]*f[a-zA-Z]*|-[a-zA-Z]*f[a-zA-Z]*\s+-[a-zA-Z]*r[a-zA-Z]*|-[a-zA-Z]*rf[a-zA-Z]*|-[a-zA-Z]*fr[a-zA-Z]*)\s+[/~]/, // rm -rf, rm -r -f, rm -fr, etc.
+	/\bfind\b.*\s-delete\b/,
+	/\bdd\b.*\bof\s*=\s*\/dev\//,
+
+	// System scheduler manipulation
 	/\bcrontab\b/,
 	/\/etc\/cron/,
+
+	// Pipe-to-shell (remote code execution)
 	/\bcurl\b.*\|\s*(sh|bash|zsh)/,
 	/\bwget\b.*\|\s*(sh|bash|zsh)/,
-	/\beval\b.*\$\(/,
+
+	// Download-then-execute patterns
+	/\bcurl\b.*-o\s+\S+.*&&\s*(sh|bash|zsh|chmod)\b/,
+	/\bwget\b.*&&\s*(sh|bash|zsh|chmod)\b/,
+
+	// Eval with subshell
+	/\beval\b/,
+
+	// Interpreter-based subprocess escapes
+	/\bpython[23]?\b.*\bsubprocess\b/,
+	/\bpython[23]?\b.*\bos\.system\b/,
+	/\bpython[23]?\b.*\bos\.popen\b/,
+	/\bperl\b.*\bsystem\b/,
+	/\bnode\b.*\bchild_process\b/,
+	/\bruby\b.*\bsystem\b/,
+
+	// Dangerous write commands targeting system paths
+	/\btee\b.*\s\/etc\//,
+	new RegExp(`\\btee\\b.*\\s${escapeRegex(HOME)}/\\.`),
+	/\bcp\b.*\s\/etc\//,
+	new RegExp(`\\bcp\\b.*\\s${escapeRegex(HOME)}/\\.ssh/`),
+	/\bmv\b.*\s\/etc\//,
+	new RegExp(`\\bmv\\b.*\\s${escapeRegex(HOME)}/\\.ssh/`),
+	/\binstall\b.*\s\/etc\//,
+	/\brsync\b.*\s\/etc\//,
+	/\bdd\b.*\bof\s*=\s*\/etc\//,
+
+	// Redirect to system files (handled more thoroughly in redirect validation below)
 	/>\s*\/etc\//,
 	/>\s*~\/\.(bash|zsh|profile)/,
 ];
@@ -99,10 +141,23 @@ export interface GuardrailResult {
 }
 
 /**
+ * Resolve a path through symlinks when possible.
+ * Falls back to path.resolve() if the file doesn't exist yet (ENOENT).
+ */
+function resolveRealPath(filePath: string): string {
+	try {
+		return fs.realpathSync(filePath);
+	} catch {
+		// File doesn't exist yet - resolve logically (safe for new file writes)
+		return path.resolve(filePath);
+	}
+}
+
+/**
  * Check if a file path is allowed for reading.
  */
 export function checkReadAccess(filePath: string): GuardrailResult {
-	const resolved = path.resolve(filePath);
+	const resolved = resolveRealPath(filePath);
 
 	// Check exact matches
 	if (READ_DENY_EXACT.includes(resolved)) {
@@ -136,7 +191,7 @@ export function checkReadAccess(filePath: string): GuardrailResult {
  * Check if a file path is allowed for writing.
  */
 export function checkWriteAccess(filePath: string, cwd: string): GuardrailResult {
-	const resolved = path.resolve(filePath);
+	const resolved = resolveRealPath(filePath);
 	const allowPrefixes = getWriteAllowPrefixes(cwd);
 
 	for (const prefix of allowPrefixes) {
@@ -166,10 +221,11 @@ export function checkBashCommand(command: string, cwd: string): GuardrailResult 
 	}
 
 	// Check for write redirections to denied paths
-	const redirectMatch = command.match(/>\s*([^\s;|&]+)/g);
+	// Matches >, >>, N> (fd redirect), N>> patterns
+	const redirectMatch = command.match(/\d*>{1,2}\s*([^\s;|&]+)/g);
 	if (redirectMatch) {
 		for (const redirect of redirectMatch) {
-			const target = redirect.replace(/^>\s*/, "").trim();
+			const target = redirect.replace(/^\d*>{1,2}\s*/, "").trim();
 			const resolved = path.resolve(cwd, target);
 
 			// Check if redirect target is in a denied location

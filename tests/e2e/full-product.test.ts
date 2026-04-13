@@ -74,7 +74,7 @@ function makeConfig(overrides?: Partial<Config>): Config {
 			telegram: {
 				enabled: true,
 				tool_escape_hatch: false,
-				allowed_peers: ["sreeni-123"],
+				allowed_peers: ["123456"],
 				allow_groups: false,
 			},
 		},
@@ -823,12 +823,12 @@ describe("E2E: Security enforcement", () => {
 		});
 
 		// Allowed peer works
-		const session = manager.getOrCreate("sreeni-123");
-		expect(session.peerId).toBe("sreeni-123");
+		const session = manager.getOrCreate("123456");
+		expect(session.peerId).toBe("123456");
 
 		// Unknown peer rejected
-		expect(() => manager.getOrCreate("stranger-456")).toThrow(PeerNotAllowedError);
-		expect(() => manager.getOrCreate("hacker-789")).toThrow(PeerNotAllowedError);
+		expect(() => manager.getOrCreate("999888")).toThrow(PeerNotAllowedError);
+		expect(() => manager.getOrCreate("777666")).toThrow(PeerNotAllowedError);
 
 		// Only 1 session created (the allowed one)
 		expect(manager.count()).toBe(1);
@@ -853,7 +853,7 @@ describe("E2E: Security enforcement", () => {
 				telegram: {
 					enabled: true,
 					tool_escape_hatch: false,
-					allowed_peers: ["test"],
+					allowed_peers: ["999999"],
 					allow_groups: false,
 				},
 			},

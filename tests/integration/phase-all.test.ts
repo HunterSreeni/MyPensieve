@@ -54,7 +54,7 @@ function validConfig(): Config {
 			telegram: {
 				enabled: true,
 				tool_escape_hatch: false,
-				allowed_peers: ["peer-456"],
+				allowed_peers: ["456789"],
 				allow_groups: false,
 			},
 		},
@@ -220,7 +220,7 @@ describe("Phase 10: Full MVP Integration", () => {
 		// Telegram session
 		const config = validConfig();
 		const telegramManager = new PeerSessionManager(config, { projectsDir, timeoutMs: 30000 });
-		const telegramSession = telegramManager.getOrCreate("peer-456");
+		const telegramSession = telegramManager.getOrCreate("456789");
 		telegramSession.project.decisions.addDecision({
 			sessionId: "s2",
 			project: telegramSession.binding,
