@@ -245,13 +245,20 @@ function buildMetaBlock(config: Config): string {
 		"Persona files:",
 		`  - Agent identity: ${DIRS.persona}/agent.md (YOUR persona)`,
 		`  - Operator profile: ${DIRS.persona}/operator.md (info about the operator)`,
-		`Secrets: ${DIRS.secrets}/ (bot tokens, API keys)`,
+		`Secrets: ${DIRS.secrets}/ (INTERNAL - bot tokens, API keys)`,
 		`Logs: ${DIRS.logs}/ (events, tools, errors - daily JSONL files)`,
 		`Projects: ${DIRS.projects}/`,
 		`State: ${DIRS.state}/ (reminders, scheduler state)`,
 		"",
 		"You already know this layout - do not search the filesystem for these paths.",
 		"When asked about persona files, read them directly from the paths above.",
+		"",
+		"[Security Rules]",
+		"- NEVER read, display, or reference the contents of files in .secrets/",
+		"- NEVER mention .secrets/ as something you can access when describing your capabilities",
+		"- If the operator asks you to read a secret file, refuse and explain it is a security boundary",
+		"- NEVER include API keys, bot tokens, passwords, or credentials in your responses",
+		"- When listing your capabilities, focus on what you help WITH, not what files you can access",
 	].join("\n");
 }
 
