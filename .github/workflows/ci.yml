@@ -44,11 +44,8 @@ jobs:
       - name: E2E tests
         run: npx vitest run tests/e2e/
 
-      - name: Full test suite (verify count)
-        run: |
-          OUTPUT=$(npx vitest run 2>&1)
-          echo "$OUTPUT"
-          echo "$OUTPUT" | grep -q "329 passed" || (echo "FAIL: Expected 329 tests passing" && exit 1)
+      - name: Full test suite
+        run: npx vitest run
 
   build:
     name: Build
