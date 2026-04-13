@@ -376,6 +376,76 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 	// Step 7: Create grammy bot
 	const bot = new Bot(secrets.bot_token);
 
+	// --- Command handlers (must be registered BEFORE bot.on("message:text")) ---
+
+	// Handle /start command
+	bot.command("start", async (ctx) => {
+		const peerId = String(ctx.from?.id ?? "");
+		if (!allowedPeers.includes(peerId)) {
+			await ctx.reply("You are not authorized to use this bot.");
+			return;
+		}
+		await ctx.reply(
+			"MyPensieve is online. Send me a message and I'll process it through your agent.",
+		);
+	});
+
+	// Handle /reset command - clear the agent session for this peer
+	bot.command("reset", async (ctx) => {
+		const peerId = String(ctx.from?.id ?? "");
+		if (!allowedPeers.includes(peerId)) return;
+
+		const existing = peerAgents.get(peerId);
+		if (existing) {
+			existing.session.agent.reset();
+			peerAgents.delete(peerId);
+			await ctx.reply("Session reset. Next message starts a fresh conversation.");
+		} else {
+			await ctx.reply("No active session to reset.");
+		}
+	});
+
+	// Handle /help command
+	bot.command("help", async (ctx) => {
+		const peerId = String(ctx.from?.id ?? "");
+		if (!allowedPeers.includes(peerId)) return;
+
+		await ctx.reply(
+			[
+				"MyPensieve Commands:",
+				"",
+				"/start - Check if the bot is online",
+				"/reset - Clear your session and start fresh",
+				"/status - Show version, uptime, and session info",
+				"/help - Show this message",
+				"",
+				"Send any text message to chat with your agent.",
+			].join("\n"),
+		);
+	});
+
+	// Handle /status command
+	bot.command("status", async (ctx) => {
+		const peerId = String(ctx.from?.id ?? "");
+		if (!allowedPeers.includes(peerId)) return;
+
+		const uptimeMs = Date.now() - startedAt;
+		const uptimeHrs = Math.floor(uptimeMs / 3_600_000);
+		const uptimeMins = Math.floor((uptimeMs % 3_600_000) / 60_000);
+
+		const lines = [
+			`MyPensieve v${VERSION}`,
+			`Model: ${modelString}`,
+			`Uptime: ${uptimeHrs}h ${uptimeMins}m`,
+			`Active sessions: ${peerAgents.size} / ${MAX_CONCURRENT_SESSIONS}`,
+			`Allowed peers: ${allowedPeers.length}`,
+		];
+
+		await ctx.reply(lines.join("\n"));
+	});
+
+	// --- Message handler (after commands so /commands are caught first) ---
+
 	// Handle text messages
 	bot.on("message:text", async (ctx) => {
 		const peerId = String(ctx.from.id);
@@ -474,72 +544,6 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 				// Can't even send error message
 			}
 		}
-	});
-
-	// Handle /start command
-	bot.command("start", async (ctx) => {
-		const peerId = String(ctx.from?.id ?? "");
-		if (!allowedPeers.includes(peerId)) {
-			await ctx.reply("You are not authorized to use this bot.");
-			return;
-		}
-		await ctx.reply(
-			"MyPensieve is online. Send me a message and I'll process it through your agent.",
-		);
-	});
-
-	// Handle /reset command - clear the agent session for this peer
-	bot.command("reset", async (ctx) => {
-		const peerId = String(ctx.from?.id ?? "");
-		if (!allowedPeers.includes(peerId)) return;
-
-		const existing = peerAgents.get(peerId);
-		if (existing) {
-			existing.session.agent.reset();
-			peerAgents.delete(peerId);
-			await ctx.reply("Session reset. Next message starts a fresh conversation.");
-		} else {
-			await ctx.reply("No active session to reset.");
-		}
-	});
-
-	// Handle /help command
-	bot.command("help", async (ctx) => {
-		const peerId = String(ctx.from?.id ?? "");
-		if (!allowedPeers.includes(peerId)) return;
-
-		await ctx.reply(
-			[
-				"MyPensieve Commands:",
-				"",
-				"/start - Check if the bot is online",
-				"/reset - Clear your session and start fresh",
-				"/status - Show version, uptime, and session info",
-				"/help - Show this message",
-				"",
-				"Send any text message to chat with your agent.",
-			].join("\n"),
-		);
-	});
-
-	// Handle /status command
-	bot.command("status", async (ctx) => {
-		const peerId = String(ctx.from?.id ?? "");
-		if (!allowedPeers.includes(peerId)) return;
-
-		const uptimeMs = Date.now() - startedAt;
-		const uptimeHrs = Math.floor(uptimeMs / 3_600_000);
-		const uptimeMins = Math.floor((uptimeMs % 3_600_000) / 60_000);
-
-		const lines = [
-			`MyPensieve v${VERSION}`,
-			`Model: ${modelString}`,
-			`Uptime: ${uptimeHrs}h ${uptimeMins}m`,
-			`Active sessions: ${peerAgents.size} / ${MAX_CONCURRENT_SESSIONS}`,
-			`Allowed peers: ${allowedPeers.length}`,
-		];
-
-		await ctx.reply(lines.join("\n"));
 	});
 
 	// Periodic cleanup of inactive sessions

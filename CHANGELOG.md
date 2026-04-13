@@ -6,6 +6,16 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.12] - 2026-04-13
+
+Fix command handler registration order.
+
+### Fixed
+
+- **Commands not firing**: `/help`, `/status`, `/start`, `/reset` were being swallowed by `bot.on("message:text")` because grammy middleware runs in registration order. Moved all `bot.command()` handlers before the text message handler so commands are caught first.
+
+---
+
 ## [0.1.11] - 2026-04-13
 
 Telegram bot commands, version awareness, config privacy, and docs refresh.
@@ -248,6 +258,7 @@ Initial MVP release - autonomous agent OS with persistent memory.
 
 ---
 
+[0.1.12]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.8...v0.1.9
