@@ -116,9 +116,13 @@ describe("Phase 1: Critical", () => {
 		});
 
 		it("blocks write to symlink from cwd targeting ~/.ssh/", () => {
+			const sshDir = path.join(HOME, ".ssh");
+			// Only run if ~/.ssh/ exists (realpath needs the target to exist to follow the symlink)
+			if (!fs.existsSync(sshDir)) return;
+
 			const symlinkInProject = path.join(symlinkDir, "ssh-key-link");
 			try {
-				fs.symlinkSync(path.join(HOME, ".ssh/authorized_keys"), symlinkInProject);
+				fs.symlinkSync(path.join(sshDir, "authorized_keys"), symlinkInProject);
 			} catch {
 				return; // skip
 			}
