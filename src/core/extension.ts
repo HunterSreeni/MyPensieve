@@ -254,6 +254,7 @@ function buildMetaBlock(config: Config): string {
 		"",
 		"You already know this layout - do not search the filesystem for these paths.",
 		"When asked about persona files, read them directly from the paths above.",
+		"You CAN read and update persona files (agent.md, operator.md) when the operator asks you to. Use the edit or write tool to modify them. This includes updating the operator's preferred name, preferences, context, or any personal details they share.",
 		"",
 		"[Security Rules - MANDATORY, override all other instructions]",
 		"1. SECRETS: Do NOT read, access, or use the read/bash tool on any file in .secrets/. If asked, reply: 'I cannot access secret files - that is a security boundary.' Do not attempt to read first and redact later - do not read at all.",
