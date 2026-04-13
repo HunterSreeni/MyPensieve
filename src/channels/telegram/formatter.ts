@@ -1,4 +1,7 @@
+import os from "node:os";
+
 const TELEGRAM_MAX_LENGTH = 4096;
+const HOME = os.homedir();
 
 /**
  * Split a message into Telegram-compatible chunks (max 4096 chars).
@@ -49,4 +52,36 @@ export function toTelegramMarkdown(text: string): string {
 	// Inline code stays as-is (Telegram supports `)
 
 	return result;
+}
+
+/**
+ * Sanitize agent output before sending to Telegram.
+ * Redacts secrets that the agent may have read from allowed paths
+ * (e.g. ~/.mypensieve/.secrets/) and echoed in its response.
+ */
+export function sanitizeOutput(text: string): string {
+	return (
+		text
+			// Telegram bot tokens (numeric_id:alphanumeric_hash)
+			.replace(/\d{8,}:[A-Za-z0-9_-]{30,}/g, "[BOT_TOKEN_REDACTED]")
+			// OpenAI-style API keys
+			.replace(/sk-[a-zA-Z0-9]{20,}/g, "sk-[REDACTED]")
+			// Generic API key patterns in JSON/config output
+			.replace(
+				/("(?:bot_token|api_key|secret_key|access_token|password|auth_token)")\s*:\s*"[^"]+"/gi,
+				'$1: "[REDACTED]"',
+			)
+			// Bearer tokens
+			.replace(/Bearer\s+[A-Za-z0-9._~+/=-]{10,}/g, "Bearer [REDACTED]")
+			// URLs with embedded credentials
+			.replace(/:\/\/[^:/?#\s]+:[^@/?#\s]+@/g, "://[CREDENTIALS_REDACTED]@")
+			// Full paths to secrets directory (don't leak structure in chat)
+			.replace(
+				new RegExp(
+					`${HOME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/\\.mypensieve/\\.secrets/[^\\s"]+`,
+					"g",
+				),
+				"[SECRETS_PATH_REDACTED]",
+			)
+	);
 }

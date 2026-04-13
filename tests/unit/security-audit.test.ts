@@ -417,6 +417,216 @@ describe("Phase 2: High", () => {
 	});
 });
 
+// --- P2-01: Secret Redaction in Error Logs ---
+describe("P2-01: Secret redaction", () => {
+	let redactSecrets: (text: string) => string;
+
+	beforeAll(async () => {
+		const mod = await import("../../src/ops/errors/capture.js");
+		redactSecrets = mod.redactSecrets;
+	});
+
+	it("redacts api_key=value patterns", () => {
+		const result = redactSecrets("error api_key=sk-abc123xyz happened");
+		expect(result).not.toContain("sk-abc123xyz");
+		expect(result).toContain("[REDACTED]");
+	});
+
+	it("redacts token: value patterns", () => {
+		const result = redactSecrets("token: my-secret-token-value");
+		expect(result).not.toContain("my-secret-token-value");
+		expect(result).toContain("[REDACTED]");
+	});
+
+	it("redacts password=value patterns", () => {
+		const result = redactSecrets("password=hunter2");
+		expect(result).not.toContain("hunter2");
+	});
+
+	it("redacts OpenAI-style keys", () => {
+		const result = redactSecrets("key is sk-abcdefghijklmnopqrstuvwxyz");
+		expect(result).toContain("sk-[REDACTED]");
+		expect(result).not.toContain("abcdefghijklmnopqrstuvwxyz");
+	});
+
+	it("redacts Bearer tokens", () => {
+		const result = redactSecrets("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload");
+		expect(result).toContain("[REDACTED]");
+		expect(result).not.toContain("eyJhbGciOiJIUzI1NiJ9");
+	});
+
+	it("redacts standalone Bearer tokens", () => {
+		const result = redactSecrets("using Bearer eyJhbGciOiJIUzI1NiJ9.payload for auth");
+		expect(result).toContain("Bearer [REDACTED]");
+		expect(result).not.toContain("eyJhbGciOiJIUzI1NiJ9");
+	});
+
+	it("redacts Telegram bot tokens", () => {
+		const result = redactSecrets("bot token is 12345678:ABCdefGHIjklMNOpqrSTUvwxYZ_01234");
+		expect(result).toContain("[BOT_TOKEN_REDACTED]");
+		expect(result).not.toContain("ABCdefGHIjklMNOpqrSTUvwxYZ_01234");
+	});
+
+	it("redacts URLs with embedded credentials", () => {
+		const result = redactSecrets("connecting to https://admin:supersecret@db.example.com/mydb");
+		expect(result).not.toContain("supersecret");
+		expect(result).toContain("[CREDENTIALS_REDACTED]@");
+	});
+
+	it("redacts X-API-Key headers", () => {
+		const result = redactSecrets("X-API-Key: my-secret-api-key-12345");
+		expect(result).not.toContain("my-secret-api-key-12345");
+		expect(result).toContain("[REDACTED]");
+	});
+
+	it("preserves non-secret text", () => {
+		const safe = "Normal error message with no secrets at all";
+		expect(redactSecrets(safe)).toBe(safe);
+	});
+});
+
+// --- P2-02: SQL LIKE Wildcard Injection ---
+describe("P2-02: SQL LIKE wildcard injection", () => {
+	it("escapes % wildcard in search queries", async () => {
+		const Database = (await import("better-sqlite3")).default;
+		const { MemoryIndex } = await import("../../src/memory/sqlite-index.js");
+
+		const dbPath = path.join(os.tmpdir(), `mypensieve-sql-test-${Date.now()}.db`);
+		const index = new MemoryIndex(dbPath);
+
+		// Insert a test decision
+		index.indexDecision({
+			id: "test-1",
+			timestamp: new Date().toISOString(),
+			session_id: "sess-1",
+			project: "test",
+			content: "Use TypeScript for the backend",
+			confidence: 0.9,
+			source: "manual",
+			tags: ["tech"],
+		});
+
+		// Search with % should NOT match everything
+		const results = index.searchDecisions("%");
+		// With escaping, % is treated as literal "%" - should find nothing
+		expect(results.length).toBe(0);
+
+		// Normal search should still work
+		const normalResults = index.searchDecisions("TypeScript");
+		expect(normalResults.length).toBe(1);
+
+		index.close();
+		fs.unlinkSync(dbPath);
+	});
+
+	it("escapes _ wildcard in search queries", async () => {
+		const { MemoryIndex } = await import("../../src/memory/sqlite-index.js");
+
+		const dbPath = path.join(os.tmpdir(), `mypensieve-sql-test2-${Date.now()}.db`);
+		const index = new MemoryIndex(dbPath);
+
+		index.indexDecision({
+			id: "test-2",
+			timestamp: new Date().toISOString(),
+			session_id: "sess-1",
+			project: "test",
+			content: "abc",
+			confidence: 0.9,
+			source: "manual",
+			tags: [],
+		});
+
+		// _ should NOT match single characters (it's escaped)
+		const results = index.searchDecisions("_");
+		expect(results.length).toBe(0);
+
+		index.close();
+		fs.unlinkSync(dbPath);
+	});
+});
+
+// --- P2-06: Output Sanitization for Telegram ---
+describe("P2-06: Telegram output sanitization", () => {
+	let sanitizeOutput: (text: string) => string;
+
+	beforeAll(async () => {
+		const mod = await import("../../src/channels/telegram/formatter.js");
+		sanitizeOutput = mod.sanitizeOutput;
+	});
+
+	it("redacts Telegram bot tokens in agent output", () => {
+		const output = "The bot token is 12345678:ABCdefGHIjklMNOpqrSTUvwxYZ_01234 from the config.";
+		const result = sanitizeOutput(output);
+		expect(result).toContain("[BOT_TOKEN_REDACTED]");
+		expect(result).not.toContain("ABCdefGHIjklMNOpqrSTUvwxYZ_01234");
+	});
+
+	it("redacts API keys in JSON output", () => {
+		const output = '{"bot_token": "12345678:ABCdef", "name": "test"}';
+		const result = sanitizeOutput(output);
+		expect(result).toContain("[REDACTED]");
+		expect(result).not.toContain("12345678:ABCdef");
+	});
+
+	it("redacts Bearer tokens in output", () => {
+		const output = "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature";
+		const result = sanitizeOutput(output);
+		expect(result).toContain("Bearer [REDACTED]");
+	});
+
+	it("redacts URL credentials in output", () => {
+		const output = "Database URL: postgres://admin:s3cret@db.host.com:5432/mydb";
+		const result = sanitizeOutput(output);
+		expect(result).not.toContain("s3cret");
+		expect(result).toContain("[CREDENTIALS_REDACTED]@");
+	});
+
+	it("redacts secrets file paths", () => {
+		const output = `The file at ${HOME}/.mypensieve/.secrets/telegram.json contains the token.`;
+		const result = sanitizeOutput(output);
+		expect(result).toContain("[SECRETS_PATH_REDACTED]");
+	});
+
+	it("preserves normal agent text", () => {
+		const output = "I checked the persona file and your name is set to Sreeni.";
+		expect(sanitizeOutput(output)).toBe(output);
+	});
+});
+
+// --- P2-08: Config Permission Check ---
+describe("P2-08: Config file permission warning", () => {
+	it("readConfig does not throw on valid config with normal permissions", async () => {
+		// This test verifies the permission check doesn't break normal operation.
+		// The actual permission warning is console.warn - we just verify no crash.
+		const { readConfig, ConfigReadError } = await import("../../src/config/reader.js");
+		const configPath = path.join(os.tmpdir(), `mypensieve-perm-test-${Date.now()}.json`);
+
+		// Write a minimal valid config
+		const config = {
+			version: 1,
+			operator: { name: "test", timezone: "UTC" },
+			tier_routing: { default: "ollama/test" },
+			backup: {
+				enabled: false,
+				cron: "30 2 * * *",
+				retention_days: 30,
+				destinations: [{ type: "local", path: "/tmp/backup" }],
+				include_secrets: false,
+			},
+		};
+		fs.writeFileSync(configPath, JSON.stringify(config));
+		fs.chmodSync(configPath, 0o444);
+
+		try {
+			const result = readConfig(configPath);
+			expect(result.operator.name).toBe("test");
+		} finally {
+			fs.chmodSync(configPath, 0o644); // restore so we can delete
+			fs.unlinkSync(configPath);
+		}
+	});
+});
+
 // ============================================================
 // PHASE 4: Low/Informational - Deny-List Coverage
 // ============================================================

@@ -28,7 +28,7 @@ import { validateChannelBinding } from "../../gateway/binding-validator.js";
 import { isPersonaTemplate } from "../../init/persona-templates.js";
 import { captureError, withCapture } from "../../ops/index.js";
 import { getOllamaHost, registerOllamaProvider } from "../../providers/ollama.js";
-import { chunkMessage, toTelegramMarkdown } from "./formatter.js";
+import { chunkMessage, sanitizeOutput, toTelegramMarkdown } from "./formatter.js";
 
 interface TelegramSecrets {
 	bot_token: string;
@@ -49,6 +49,28 @@ function readTelegramSecrets(): TelegramSecrets {
 		throw new Error(
 			`Telegram secrets not found at ${secretsPath}.\nRun 'mypensieve init --restart' and enable Telegram to set your bot token.`,
 		);
+	}
+
+	// Check secrets file permissions
+	try {
+		const dirStat = fs.statSync(path.dirname(secretsPath));
+		const dirMode = dirStat.mode & 0o777;
+		if (dirMode !== 0o700) {
+			console.warn(
+				`[mypensieve] WARNING: Secrets directory has mode ${dirMode.toString(8)}, expected 700. ` +
+					`Run: chmod 700 ${path.dirname(secretsPath)}`,
+			);
+		}
+		const fileStat = fs.statSync(secretsPath);
+		const fileMode = fileStat.mode & 0o777;
+		if (fileMode !== 0o600) {
+			console.warn(
+				`[mypensieve] WARNING: Secrets file has mode ${fileMode.toString(8)}, expected 600. ` +
+					`Run: chmod 600 ${secretsPath}`,
+			);
+		}
+	} catch {
+		// stat failed - will be caught by readFileSync below
 	}
 
 	const raw = fs.readFileSync(secretsPath, "utf-8");
@@ -357,7 +379,8 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 			const response = extractResponseText(session);
 			console.log(`[telegram] >> ${response.slice(0, 120)}`);
 
-			const formatted = toTelegramMarkdown(response);
+			const sanitized = sanitizeOutput(response);
+			const formatted = toTelegramMarkdown(sanitized);
 			const chunks = chunkMessage(formatted);
 
 			for (const chunk of chunks) {

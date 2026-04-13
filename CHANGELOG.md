@@ -6,6 +6,28 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.7] - 2026-04-13
+
+OWASP security hardening (Phase 2) - information disclosure, injection, and data integrity.
+
+### Security
+
+- **Fixed broken secret redaction (P2-01)**: `redactSecrets()` regex was non-functional (`$&` back-reference evaluated at string construction, not runtime). Rewritten with proper callback. Added patterns for Telegram bot tokens, URLs with embedded credentials, and custom auth headers (X-API-Key, X-Auth-Token).
+- **SQL LIKE wildcard injection fix (P2-02)**: `searchDecisions("%")` no longer returns all rows. User input `%` and `_` characters are now escaped with `ESCAPE '\'` clause.
+- **Telegram output sanitization (P2-06)**: New `sanitizeOutput()` filter runs before every Telegram reply. Redacts bot tokens, API keys, Bearer tokens, URL credentials, and `~/.mypensieve/.secrets/` paths from agent responses.
+- **Config permission warning (P2-08)**: `readConfig()` now checks file permissions and warns if config.json is world-writable (could allow peer allowlist manipulation).
+- **Secrets permission warning (P2-09)**: `readTelegramSecrets()` now verifies `.secrets/` dir is mode 700 and secret files are mode 600, warns on drift.
+
+### Added
+
+- 19 new security tests: secret redaction (9 patterns), SQL wildcard escaping (2), output sanitization (6), config permission check (1), standalone Bearer token (1).
+
+### Changed
+
+- `redactSecrets()` is now exported for testability.
+
+---
+
 ## [0.1.6] - 2026-04-13
 
 OWASP security hardening (Phase 1) + agent directory awareness.
@@ -141,6 +163,7 @@ Initial MVP release - autonomous agent OS with persistent memory.
 
 ---
 
+[0.1.7]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.3...v0.1.4

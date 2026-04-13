@@ -79,14 +79,26 @@ export function resolveError(
 
 /**
  * Redact potential secrets from error messages.
- * Catches common patterns: API keys, tokens, passwords.
+ * Catches common patterns: API keys, tokens, passwords, URLs with creds, bot tokens.
  */
-function redactSecrets(text: string): string {
-	return text
-		.replace(
-			/(?:api[_-]?key|token|password|secret|authorization)\s*[:=]\s*\S+/gi,
-			"$&".replace(/\S+$/, "[REDACTED]"),
-		)
-		.replace(/sk-[a-zA-Z0-9]{20,}/g, "sk-[REDACTED]")
-		.replace(/Bearer\s+\S+/g, "Bearer [REDACTED]");
+export function redactSecrets(text: string): string {
+	return (
+		text
+			// Bearer tokens (must run before the generic key=value pattern)
+			.replace(/Bearer\s+\S+/g, "Bearer [REDACTED]")
+			// Key=value patterns (api_key=xxx, token: xxx, password=xxx, etc.)
+			.replace(/(?:api[_-]?key|token|password|secret|authorization)\s*[:=]\s*\S+/gi, (match) =>
+				match.replace(/[:=]\s*\S+/, ": [REDACTED]"),
+			)
+			// OpenAI-style keys
+			.replace(/sk-[a-zA-Z0-9]{20,}/g, "sk-[REDACTED]")
+			// Telegram bot tokens (numeric_id:alphanumeric)
+			.replace(/\d{8,}:[A-Za-z0-9_-]{30,}/g, "[BOT_TOKEN_REDACTED]")
+			// URLs with embedded credentials (http://user:pass@host)
+			.replace(/:\/\/[^:/?#\s]+:[^@/?#\s]+@/g, "://[CREDENTIALS_REDACTED]@")
+			// Custom auth headers (X-API-Key, X-Auth-Token, etc.)
+			.replace(/X-(?:API|Auth)[_-](?:Key|Token)\s*:\s*\S+/gi, (match) =>
+				match.replace(/:\s*\S+/, ": [REDACTED]"),
+			)
+	);
 }

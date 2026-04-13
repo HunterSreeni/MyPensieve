@@ -2,6 +2,9 @@ import fs from "node:fs";
 import { CONFIG_PATH } from "./paths.js";
 import { type Config, ConfigSchema } from "./schema.js";
 
+/** Maximum safe permission mode for config files (owner read-write, group/other read-only). */
+const MAX_SAFE_CONFIG_MODE = 0o644;
+
 export class ConfigReadError extends Error {
 	constructor(
 		message: string,
@@ -48,6 +51,23 @@ function migrateConfig(config: Record<string, unknown>): void {
  * Throws ConfigReadError if the file is missing, unreadable, or invalid.
  */
 export function readConfig(configPath: string = CONFIG_PATH): Config {
+	// Check file permissions (warn if world-writable)
+	try {
+		const stat = fs.statSync(configPath);
+		const mode = stat.mode & 0o777;
+		if ((mode & 0o002) !== 0) {
+			console.warn(
+				`[mypensieve] WARNING: Config file ${configPath} is world-writable (mode ${mode.toString(8)}). This is a security risk - other users could modify your allowed_peers list. Run: chmod 444 ${configPath}`,
+			);
+		} else if (mode > MAX_SAFE_CONFIG_MODE) {
+			console.warn(
+				`[mypensieve] WARNING: Config file ${configPath} has permissive mode ${mode.toString(8)}. Recommended: chmod 444 ${configPath}`,
+			);
+		}
+	} catch {
+		// stat failed - will be caught by readFileSync below
+	}
+
 	let raw: string;
 	try {
 		raw = fs.readFileSync(configPath, "utf-8");

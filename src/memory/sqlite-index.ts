@@ -277,8 +277,10 @@ export class MemoryIndex {
 	// --- Full-text search across decisions ---
 
 	searchDecisions(query: string, opts?: { project?: string; limit?: number }): Decision[] {
-		let sql = "SELECT * FROM decisions WHERE content LIKE ?";
-		const params: unknown[] = [`%${query}%`];
+		// Escape LIKE wildcards in user input to prevent wildcard injection
+		const escaped = query.replace(/[%_\\]/g, "\\$&");
+		let sql = "SELECT * FROM decisions WHERE content LIKE ? ESCAPE '\\'";
+		const params: unknown[] = [`%${escaped}%`];
 
 		if (opts?.project) {
 			sql += " AND project = ?";
