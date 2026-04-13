@@ -1,4 +1,5 @@
 import { startCliSession } from "../../channels/cli/start.js";
+import { VERSION } from "../../version.js";
 import { registerCommand } from "../router.js";
 import { runDoctor } from "./doctor.js";
 import { runErrors } from "./errors.js";
@@ -58,7 +59,37 @@ registerCommand({
 	description: "Run a healthcheck on all components",
 	usage: "mypensieve doctor",
 	run: async (_args) => {
-		runDoctor();
+		await runDoctor();
+	},
+});
+
+registerCommand({
+	name: "status",
+	description: "Show version, model, and config summary",
+	usage: "mypensieve status",
+	run: async (_args) => {
+		const { readConfig } = await import("../../config/index.js");
+		const { resolveDefaultModel } = await import("../../config/schema.js");
+		const { getOllamaHost } = await import("../../providers/ollama.js");
+
+		console.log(`MyPensieve v${VERSION}\n`);
+
+		try {
+			const config = readConfig();
+			const model = resolveDefaultModel(config);
+			const host = getOllamaHost();
+
+			console.log(`  Operator:    ${config.operator.name}`);
+			console.log(`  Timezone:    ${config.operator.timezone}`);
+			console.log(`  Model:       ${model}`);
+			console.log(`  Ollama host: ${host}`);
+			console.log(`  Channels:    CLI${config.channels.telegram.enabled ? " + Telegram" : ""}`);
+			console.log(`  Persona:     ${config.agent_persona?.name ?? "(not set)"}`);
+			console.log(`  Embeddings:  ${config.embeddings.enabled ? "enabled" : "disabled"}`);
+			console.log(`  Backup:      ${config.backup.enabled ? "enabled" : "disabled"}`);
+		} catch {
+			console.log("  No config found. Run 'mypensieve init' first.");
+		}
 	},
 });
 

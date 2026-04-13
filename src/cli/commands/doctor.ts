@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import { CONFIG_PATH, DIRS } from "../../config/paths.js";
 import { ConfigReadError, readConfig } from "../../config/reader.js";
+import { parseModelString, resolveDefaultModel } from "../../config/schema.js";
 import { verifyDirectories } from "../../init/directories.js";
+import { getOllamaHost, probeOllama } from "../../providers/ollama.js";
+import { VERSION } from "../../version.js";
 
 interface DoctorCheck {
 	name: string;
@@ -13,7 +16,7 @@ interface DoctorCheck {
  * Run healthcheck against all MyPensieve components.
  * Reports issues and suggestions.
  */
-export function runDoctor(): void {
+export async function runDoctor(): Promise<void> {
 	const checks: DoctorCheck[] = [];
 
 	// Check 1: Config file
@@ -120,8 +123,42 @@ export function runDoctor(): void {
 		checks.push({ name: "Errors", status: "ok", message: "No error log for today" });
 	}
 
+	// Check 5: Ollama connectivity + model availability
+	try {
+		const config = readConfig();
+		const modelString = resolveDefaultModel(config);
+		const { modelId } = parseModelString(modelString);
+		const host = getOllamaHost();
+		const probe = await probeOllama(host);
+
+		if (!probe.ok) {
+			checks.push({
+				name: "Ollama",
+				status: "fail",
+				message: `Cannot reach Ollama at ${host}: ${probe.error}`,
+			});
+		} else {
+			checks.push({ name: "Ollama", status: "ok", message: `Connected to ${host}` });
+
+			const modelExists = probe.models.some(
+				(m) => m.name === modelId || m.name.startsWith(`${modelId}:`),
+			);
+			if (modelExists) {
+				checks.push({ name: "Model", status: "ok", message: `${modelId} available` });
+			} else {
+				checks.push({
+					name: "Model",
+					status: "warn",
+					message: `${modelId} not found locally (may be a cloud model pulled on demand)`,
+				});
+			}
+		}
+	} catch {
+		checks.push({ name: "Ollama", status: "warn", message: "Could not check (config not loaded)" });
+	}
+
 	// Print results
-	console.log("\nMyPensieve Health Check\n");
+	console.log(`\nMyPensieve v${VERSION} Health Check\n`);
 
 	let hasFailures = false;
 	for (const check of checks) {

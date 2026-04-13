@@ -1,4 +1,5 @@
 import { captureError } from "../ops/index.js";
+import { VERSION } from "../version.js";
 
 export interface CommandHandler {
 	name: string;
@@ -34,8 +35,7 @@ export async function dispatch(argv: string[]): Promise<void> {
 	}
 
 	if (commandName === "--version" || commandName === "-v") {
-		// Will be populated from package.json at build time
-		console.log("mypensieve v0.1.0");
+		console.log(`mypensieve v${VERSION}`);
 		return;
 	}
 
