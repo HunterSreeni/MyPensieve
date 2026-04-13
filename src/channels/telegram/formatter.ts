@@ -88,6 +88,8 @@ export function sanitizeOutput(text: string): string {
 				/("(?:bot_token|api_key|secret_key|access_token|password|auth_token)")\s*:\s*"[^"]+"/gi,
 				'$1: "[REDACTED]"',
 			)
+			// Config field values that shouldn't leak in chat
+			.replace(/("allowed_peers")\s*:\s*\[[^\]]*\]/gi, '"allowed_peers": ["[REDACTED]"]')
 			// Bearer tokens
 			.replace(/Bearer\s+[A-Za-z0-9._~+/=-]{10,}/g, "Bearer [REDACTED]")
 			// URLs with embedded credentials
