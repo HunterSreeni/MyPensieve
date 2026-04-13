@@ -39,19 +39,36 @@ export function chunkMessage(text: string): string[] {
 	return chunks;
 }
 
+/** Characters that must be escaped in Telegram MarkdownV2 (outside code blocks). */
+const MARKDOWNV2_SPECIAL = /([_*[\]()~`>#+\-=|{}.!\\])/g;
+
 /**
- * Convert markdown to Telegram-compatible format.
- * Telegram supports a subset: bold, italic, code, links.
+ * Escape special characters for Telegram MarkdownV2.
+ * Preserves code blocks (``` ... ```) and inline code (` ... `) by
+ * only escaping text outside of those regions.
+ */
+export function escapeMarkdownV2(text: string): string {
+	// Split on code blocks and inline code, escape only non-code segments
+	const parts = text.split(/(```[\s\S]*?```|`[^`]+`)/g);
+	return parts
+		.map((part, i) => {
+			// Odd indices are code blocks/inline code - leave them as-is
+			if (i % 2 === 1) return part;
+			return part.replace(MARKDOWNV2_SPECIAL, "\\$1");
+		})
+		.join("");
+}
+
+/**
+ * Convert markdown to Telegram-compatible MarkdownV2 format.
+ * Escapes special characters and converts headers to bold.
  */
 export function toTelegramMarkdown(text: string): string {
-	// Telegram uses MarkdownV2 - we keep it simple
-	// Headers -> bold
-	const result = text.replace(/^#{1,6}\s+(.+)$/gm, "*$1*");
+	// Escape first, then apply formatting (so bold * markers are not escaped)
+	const escaped = escapeMarkdownV2(text);
 
-	// Code blocks stay as-is (Telegram supports ```)
-	// Inline code stays as-is (Telegram supports `)
-
-	return result;
+	// Headers -> bold (# markers were escaped to \#, match sequences like \# or \#\#)
+	return escaped.replace(/^(?:\\#){1,6}\s+(.+)$/gm, "*$1*");
 }
 
 /**

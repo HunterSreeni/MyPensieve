@@ -6,6 +6,27 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.9] - 2026-04-13
+
+OWASP security hardening (Phase 4) - hardening, monitoring, and best practices. Completes the full audit.
+
+### Security
+
+- **MarkdownV2 escaping (P4-04)**: New `escapeMarkdownV2()` properly escapes all Telegram MarkdownV2 special characters outside code blocks/inline code. Eliminates Telegram API errors on formatted messages (previously fell back to plain text silently).
+
+### Added
+
+- 13 new security tests: error containment (1), audit log completeness (3), MarkdownV2 escaping (4), atomic secret writes (2), SQLite WAL concurrency (3).
+
+### Audited (confirmed safe, no code changes needed)
+
+- **P4-01**: Telegram error handler sends only `"Something went wrong. Check the logs."` - no stack traces, paths, or error details reach the chat.
+- **P4-02**: Extension logs both `tool_execution_start` and `tool_execution_end` events. Tool guard logs all denials with `security_guardrail` error type.
+- **P4-06**: `writeSecret()` uses atomic temp+rename pattern with mode 0600. The `existed` check has a benign TOCTOU window (cosmetic only).
+- **P4-08**: SQLite uses WAL mode for concurrent read safety. Two `MemoryIndex` instances can read the same database simultaneously.
+
+---
+
 ## [0.1.8] - 2026-04-13
 
 OWASP security hardening (Phase 3) - DoS prevention, supply chain, and data poisoning.
@@ -187,6 +208,7 @@ Initial MVP release - autonomous agent OS with persistent memory.
 
 ---
 
+[0.1.9]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/HunterSreeni/MyPensieve/compare/v0.1.5...v0.1.6

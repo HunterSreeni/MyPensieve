@@ -810,3 +810,169 @@ describe("Phase 3: Medium", () => {
 		});
 	});
 });
+
+// ============================================================
+// PHASE 4: Low/Informational (extended)
+// ============================================================
+
+describe("Phase 4: Extended", () => {
+	// --- P4-01: Error Messages Don't Leak to Telegram ---
+	describe("P4-01: Error message containment", () => {
+		it("Telegram error handler sends only generic message", () => {
+			// Verify by reading the source - the catch block must contain
+			// a hardcoded generic reply, not the error object
+			const startSrc = fs.readFileSync(
+				path.join(process.cwd(), "src/channels/telegram/start.ts"),
+				"utf-8",
+			);
+			// The catch block should send a generic message
+			expect(startSrc).toContain('"Something went wrong. Check the logs."');
+			// And should NOT interpolate error.message into the reply
+			expect(startSrc).not.toContain("ctx.reply(e.message)");
+			expect(startSrc).not.toContain("ctx.reply(err.message)");
+			expect(startSrc).not.toContain("ctx.reply(e.stack)");
+		});
+	});
+
+	// --- P4-02: Audit Log Completeness ---
+	describe("P4-02: Audit log completeness", () => {
+		it("extension logs tool_execution_start events", () => {
+			const extSrc = fs.readFileSync(path.join(process.cwd(), "src/core/extension.ts"), "utf-8");
+			expect(extSrc).toContain('"tool_execution_start"');
+			expect(extSrc).toContain("logToolEvent");
+		});
+
+		it("extension logs tool_execution_end events", () => {
+			const extSrc = fs.readFileSync(path.join(process.cwd(), "src/core/extension.ts"), "utf-8");
+			expect(extSrc).toContain('"tool_execution_end"');
+		});
+
+		it("tool guard logs denied operations", () => {
+			const guardSrc = fs.readFileSync(
+				path.join(process.cwd(), "src/core/security/tool-guard.ts"),
+				"utf-8",
+			);
+			expect(guardSrc).toContain("logDenial");
+			expect(guardSrc).toContain("security_guardrail");
+		});
+	});
+
+	// --- P4-04: MarkdownV2 Escaping ---
+	describe("P4-04: Telegram MarkdownV2 escaping", () => {
+		let escapeMarkdownV2: (text: string) => string;
+		let toTelegramMarkdown: (text: string) => string;
+
+		beforeAll(async () => {
+			const mod = await import("../../src/channels/telegram/formatter.js");
+			escapeMarkdownV2 = mod.escapeMarkdownV2;
+			toTelegramMarkdown = mod.toTelegramMarkdown;
+		});
+
+		it("escapes special characters outside code blocks", () => {
+			const result = escapeMarkdownV2("Price is $100.00 (50% off!)");
+			// MarkdownV2 special chars: . ( ) !
+			expect(result).toContain("\\.");
+			expect(result).toContain("\\(");
+			expect(result).toContain("\\)");
+			expect(result).toContain("\\!");
+			// $ and % are NOT MarkdownV2 special chars - should be preserved
+			expect(result).toContain("$100");
+			expect(result).toContain("50%");
+		});
+
+		it("preserves code blocks unescaped", () => {
+			const result = escapeMarkdownV2("text ```const x = 1 + 2;``` more");
+			expect(result).toContain("```const x = 1 + 2;```");
+			// "text" and "more" should have their chars escaped if needed
+		});
+
+		it("preserves inline code unescaped", () => {
+			const result = escapeMarkdownV2("use `rm -rf /` carefully");
+			expect(result).toContain("`rm -rf /`");
+		});
+
+		it("toTelegramMarkdown converts headers to bold after escaping", () => {
+			const result = toTelegramMarkdown("# Hello\n## World");
+			expect(result).toContain("*Hello*");
+			expect(result).toContain("*World*");
+		});
+	});
+
+	// --- P4-06: TOCTOU in Secret Writes ---
+	describe("P4-06: Atomic secret writes", () => {
+		it("writeSecret uses atomic temp+rename pattern", () => {
+			const writerSrc = fs.readFileSync(
+				path.join(process.cwd(), "src/init/secrets-writer.ts"),
+				"utf-8",
+			);
+			// Verify atomic write pattern: temp file -> rename
+			expect(writerSrc).toContain(".tmp");
+			expect(writerSrc).toContain("renameSync");
+			// Verify mode 0600
+			expect(writerSrc).toContain("0o600");
+		});
+
+		it("writeSecret rejects path traversal in filename", async () => {
+			const { writeSecret, SecretsWriteError } = await import("../../src/init/secrets-writer.js");
+			expect(() => writeSecret("../escape.json", { data: "evil" })).toThrow(SecretsWriteError);
+			expect(() => writeSecret(".hidden", { data: "evil" })).toThrow(SecretsWriteError);
+			expect(() => writeSecret("sub/dir.json", { data: "evil" })).toThrow(SecretsWriteError);
+		});
+	});
+
+	// --- P4-08: Concurrent SQLite Access ---
+	describe("P4-08: SQLite WAL mode for concurrent reads", () => {
+		it("MemoryIndex enables WAL mode", () => {
+			const sqliteSrc = fs.readFileSync(
+				path.join(process.cwd(), "src/memory/sqlite-index.ts"),
+				"utf-8",
+			);
+			expect(sqliteSrc).toContain("journal_mode = WAL");
+		});
+
+		it("MemoryIndex enables foreign keys", () => {
+			const sqliteSrc = fs.readFileSync(
+				path.join(process.cwd(), "src/memory/sqlite-index.ts"),
+				"utf-8",
+			);
+			expect(sqliteSrc).toContain("foreign_keys = ON");
+		});
+
+		it("two readers can access the same database", async () => {
+			const { MemoryIndex } = await import("../../src/memory/sqlite-index.js");
+			const dbPath = path.join(os.tmpdir(), `mypensieve-wal-test-${Date.now()}.db`);
+
+			const idx1 = new MemoryIndex(dbPath);
+			idx1.indexDecision({
+				id: "wal-test-1",
+				timestamp: new Date().toISOString(),
+				session_id: "s1",
+				project: "test",
+				content: "WAL test decision",
+				confidence: 0.8,
+				source: "manual",
+				tags: [],
+			});
+
+			// Open a second reader on the same file
+			const idx2 = new MemoryIndex(dbPath);
+			const stats = idx2.getStats();
+			expect(stats.decisions).toBeGreaterThanOrEqual(1);
+
+			idx1.close();
+			idx2.close();
+			fs.unlinkSync(dbPath);
+			// Clean up WAL/SHM files if they exist
+			try {
+				fs.unlinkSync(`${dbPath}-wal`);
+			} catch {
+				/* may not exist */
+			}
+			try {
+				fs.unlinkSync(`${dbPath}-shm`);
+			} catch {
+				/* may not exist */
+			}
+		});
+	});
+});
