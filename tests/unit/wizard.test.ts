@@ -163,7 +163,7 @@ describe("Wizard framework", () => {
 describe("Wizard steps", () => {
 	it("creates 10 steps", () => {
 		const steps = createWizardSteps();
-		expect(steps).toHaveLength(10);
+		expect(steps).toHaveLength(9);
 	});
 
 	it("steps have correct names", () => {
@@ -171,7 +171,6 @@ describe("Wizard steps", () => {
 		const names = steps.map((s) => s.name);
 		expect(names).toEqual([
 			"welcome",
-			"project",
 			"providers",
 			"routing",
 			"embeddings",
