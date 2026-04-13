@@ -32,6 +32,7 @@ import { validateChannelBinding } from "../gateway/binding-validator.js";
 import { isOperatorTemplate, isPersonaTemplate } from "../init/persona-templates.js";
 import { captureError } from "../ops/index.js";
 import { appendJsonl } from "../utils/jsonl.js";
+import { VERSION } from "../version.js";
 import { PERSONA_BOOTSTRAP_PROMPT, buildPersonaSystemPrompt } from "./persona-bootstrap.js";
 import { ECHOES_STATE_PATH } from "./scheduler/index.js";
 
@@ -236,6 +237,7 @@ function buildEchoBlock(timezone: string): string {
 function buildMetaBlock(config: Config): string {
 	return [
 		"\n\n[MyPensieve Context]",
+		`Version: ${VERSION}`,
 		`Operator: ${config.operator.name}`,
 		`Timezone: ${config.operator.timezone}`,
 		"",

@@ -1,5 +1,5 @@
 # MyPensieve - Known Limitations
-> Last updated: 2026-04-12
+> Last updated: 2026-04-13 (v0.1.11)
 
 These are honest disclaimers about what works, what doesn't, and what to expect.
 
@@ -20,7 +20,7 @@ These are honest disclaimers about what works, what doesn't, and what to expect.
 - Cloud models require `ollama signin` with an NVIDIA account
 - Local models require sufficient VRAM (7B = ~4GB, 13B = ~8GB, 70B = ~40GB)
 - No OpenRouter/Anthropic/OpenAI support yet (planned for v0.3.0)
-- Model quality varies - smaller models may not follow the persona prompt well
+- Model quality varies - smaller models may not follow the persona prompt or security rules well
 
 ## Platform Support
 
@@ -41,16 +41,17 @@ These are honest disclaimers about what works, what doesn't, and what to expect.
 - Messages sent while bot is offline queue on Telegram's side and deliver when bot restarts
 - No push notifications when bot is offline
 - Group messages blocked by default (security - prevents token burn from strangers)
-- Markdown formatting may occasionally fail (falls back to plain text)
+- Available commands: `/start`, `/reset`, `/status`, `/help`
 
-## Security Guardrails
+## Security Guardrails (hardened in v0.1.6-v0.1.10)
 
-- Bash command filtering uses regex patterns - sophisticated evasion is theoretically possible
-- Write allow-list checks path prefixes, not symlink resolution
-- Read deny-list covers common sensitive paths but may miss obscure ones
-- These are **defense-in-depth**, not a security guarantee for untrusted inputs
-- The Telegram channel is the highest-risk surface (unattended, remote access)
-- Prompt injection via Telegram messages could potentially bypass persona instructions
+- **Symlink traversal**: Fixed in v0.1.6 - uses `fs.realpathSync()` to resolve symlinks before deny/allow checks
+- **Bash deny patterns**: Regex-based with 30+ patterns. Covers sudo, rm -rf, find -delete, dd, eval, interpreter escapes, download-then-execute. Sophisticated evasion is still theoretically possible
+- **Read deny-list**: Blocks /etc/shadow, ~/.ssh/, ~/.config/, /proc/, /sys/, .env files, .pem/.key files
+- **Write allow-list**: Only ~/.mypensieve/, cwd, /tmp/ (symlink-safe)
+- **Output sanitizer**: Redacts bot tokens, API keys, Bearer tokens, URL credentials, allowed_peers, and secrets paths before Telegram replies
+- **System prompt security rules**: 8 mandatory rules covering secrets access, prompt leakage, credential handling, config privacy. LLM-enforced (not deterministic) - model quality affects compliance
+- **Defense in depth**: guardrails (code) + tool guard (hook) + output sanitizer (filter) + system prompt rules (LLM)
 
 ## Echoes (Scheduled Tasks)
 
@@ -68,7 +69,7 @@ These are warnings, not errors. They don't affect functionality or security.
 
 ## Known Bugs / Rough Edges
 
-- Agent may occasionally show tool output instead of a natural response (fallback when model skips text commentary)
+- Agent may occasionally show raw tool output instead of a natural response (fallback when model skips text commentary)
 - The `save_persona` tool may not fire correctly if the model doesn't follow tool-use patterns
-- Extension's `before_agent_start` doesn't fire if Pi's internal session_start hasn't completed
+- System prompt security rules depend on model quality - smaller models may not follow them consistently
 - Wizard TUI is basic readline (no arrow-key navigation) - upgrade planned for v0.4.0

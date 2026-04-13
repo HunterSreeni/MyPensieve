@@ -28,6 +28,7 @@ import { validateChannelBinding } from "../../gateway/binding-validator.js";
 import { isPersonaTemplate } from "../../init/persona-templates.js";
 import { captureError, withCapture } from "../../ops/index.js";
 import { getOllamaHost, registerOllamaProvider } from "../../providers/ollama.js";
+import { VERSION } from "../../version.js";
 import { chunkMessage, sanitizeOutput, toTelegramMarkdown } from "./formatter.js";
 import { PeerRateLimiter } from "./rate-limiter.js";
 
@@ -222,6 +223,7 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 	const peerAgents = new Map<string, PeerAgent>();
 	const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 min inactivity
 	const rateLimiter = new PeerRateLimiter();
+	const startedAt = Date.now();
 
 	/**
 	 * Get or create a Pi agent session for a given peer.
@@ -499,6 +501,45 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 		} else {
 			await ctx.reply("No active session to reset.");
 		}
+	});
+
+	// Handle /help command
+	bot.command("help", async (ctx) => {
+		const peerId = String(ctx.from?.id ?? "");
+		if (!allowedPeers.includes(peerId)) return;
+
+		await ctx.reply(
+			[
+				"MyPensieve Commands:",
+				"",
+				"/start - Check if the bot is online",
+				"/reset - Clear your session and start fresh",
+				"/status - Show version, uptime, and session info",
+				"/help - Show this message",
+				"",
+				"Send any text message to chat with your agent.",
+			].join("\n"),
+		);
+	});
+
+	// Handle /status command
+	bot.command("status", async (ctx) => {
+		const peerId = String(ctx.from?.id ?? "");
+		if (!allowedPeers.includes(peerId)) return;
+
+		const uptimeMs = Date.now() - startedAt;
+		const uptimeHrs = Math.floor(uptimeMs / 3_600_000);
+		const uptimeMins = Math.floor((uptimeMs % 3_600_000) / 60_000);
+
+		const lines = [
+			`MyPensieve v${VERSION}`,
+			`Model: ${modelString}`,
+			`Uptime: ${uptimeHrs}h ${uptimeMins}m`,
+			`Active sessions: ${peerAgents.size} / ${MAX_CONCURRENT_SESSIONS}`,
+			`Allowed peers: ${allowedPeers.length}`,
+		];
+
+		await ctx.reply(lines.join("\n"));
 	});
 
 	// Periodic cleanup of inactive sessions
