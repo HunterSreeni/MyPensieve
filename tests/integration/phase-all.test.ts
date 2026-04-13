@@ -369,13 +369,12 @@ describe("Phase 10: Full MVP Integration", () => {
 		projects.forEach((p) => closeProject(p));
 	});
 
-	it("wizard creates correct 10-step structure", async () => {
+	it("wizard creates correct 9-step structure", async () => {
 		const { createWizardSteps } = await import("../../src/wizard/steps.js");
 		const steps = createWizardSteps();
-		expect(steps).toHaveLength(10);
+		expect(steps).toHaveLength(9);
 		expect(steps.map((s: { name: string }) => s.name)).toEqual([
 			"welcome",
-			"project",
 			"providers",
 			"routing",
 			"embeddings",
