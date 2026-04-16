@@ -6,6 +6,23 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.0-alpha.2] - 2026-04-16
+
+Phase 2/5: Multi-model council registration.
+
+### Added
+- **Multi-provider registration** (`src/providers/multi-register.ts`): `buildRegistrationPlan()` collects all unique provider/model pairs from `default_model` + `agent_models`, groups by provider, resolves API keys. `executeRegistrationPlan()` registers all providers in one pass with batched models.
+- **Wizard routing step upgraded**: clack UI with provider format examples, note boxes for model assignments.
+
+### Changed
+- CLI and Telegram channels now register ALL providers from config (default + per-agent) in a single pass, not just the default provider. Different council agents can now use different providers (e.g. orchestrator on Ollama, researcher on Anthropic).
+- Registration plan warnings (missing API keys, unsupported providers) logged to stderr and captured in error log.
+
+### Tests
+- 7 new tests for multi-register (plan building, deduplication, batching, missing keys, unsupported providers). Total suite: 505 tests (was 498).
+
+---
+
 ## [0.2.0-alpha.1] - 2026-04-16
 
 Phase 1/5: Wizard multi-provider menu + TUI upgrade (@clack/prompts).

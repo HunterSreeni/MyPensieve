@@ -27,9 +27,9 @@ import { savePersonaTool } from "../../core/tools/persona-tool.js";
 import { validateChannelBinding } from "../../gateway/binding-validator.js";
 import { isPersonaTemplate } from "../../init/persona-templates.js";
 import { captureError, withCapture } from "../../ops/index.js";
-import { isProviderSupported, registerProviderByName } from "../../providers/factory.js";
+import { isProviderSupported } from "../../providers/factory.js";
+import { buildRegistrationPlan, executeRegistrationPlan } from "../../providers/multi-register.js";
 import { getOllamaHost } from "../../providers/ollama.js";
-import { readProviderApiKey } from "../../providers/secrets.js";
 import { VERSION } from "../../version.js";
 import { chunkMessage, sanitizeOutput, toTelegramMarkdown } from "./formatter.js";
 import { PeerRateLimiter } from "./rate-limiter.js";
@@ -186,24 +186,24 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 		return;
 	}
 
-	// Resolve API key for non-Ollama providers
-	let apiKey = "";
-	if (provider !== "ollama") {
-		try {
-			apiKey = readProviderApiKey(provider);
-		} catch (err) {
-			const e = err instanceof Error ? err : new Error(String(err));
-			captureError({
-				severity: "critical",
-				errorType: "provider_apikey",
-				errorSrc: "telegram:apikey",
-				message: e.message,
-				context: { provider },
-			});
-			console.error(e.message);
-			process.exitCode = 1;
-			return;
-		}
+	// Build multi-provider registration plan (default model + per-agent models)
+	const registrationPlan = buildRegistrationPlan(config);
+	for (const warn of registrationPlan.warnings) {
+		console.error(`[telegram] WARN: ${warn}`);
+		captureError({
+			severity: "medium",
+			errorType: "provider_registration_warn",
+			errorSrc: "telegram:registration-plan",
+			message: warn,
+		});
+	}
+
+	if (registrationPlan.apiKeys[provider] === undefined && provider !== "ollama") {
+		console.error(
+			`API key missing for default provider '${provider}'. Run 'mypensieve init --restart'.`,
+		);
+		process.exitCode = 1;
+		return;
 	}
 
 	// Step 4: Read bot token
@@ -272,13 +272,13 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 
 			await withCapture(
 				{
-					errorSrc: "telegram:register-provider",
+					errorSrc: "telegram:register-providers",
 					errorType: "provider_registration",
 					severity: "critical",
-					context: { provider, modelId },
+					context: { providers: Object.keys(registrationPlan.providers) },
 				},
 				async () => {
-					registerProviderByName(provider, services.modelRegistry, modelId, apiKey);
+					executeRegistrationPlan(registrationPlan, services.modelRegistry);
 				},
 			);
 

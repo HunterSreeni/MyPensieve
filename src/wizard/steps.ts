@@ -320,41 +320,47 @@ export function createWizardSteps(): WizardStep[] {
 		},
 		{
 			name: "routing",
-			description: "Per-agent model assignment",
+			description: "Per-agent model assignment (multi-model council)",
 			run: async (state) => {
 				const defaultModel = state.config.default_model as string | undefined;
 
 				if (!defaultModel) {
-					console.log("  Skipping per-agent assignment (no default model set)");
+					note("Skipping - no default model set", "Per-agent routing");
 					return;
 				}
 
-				const perAgent = await confirm("Assign different models to different agents?", false);
+				const perAgent = await confirm("Assign different models to council agents?", false);
 
-				if (perAgent) {
-					console.log("\n  Enter model for each agent (press Enter to use default):\n");
-
-					const orchestrator = await ask("Orchestrator model", defaultModel);
-					const researcher = await ask("Researcher model", defaultModel);
-					const critic = await ask("Critic model", defaultModel);
-					const devilAdvocate = await ask("Devil's Advocate model", defaultModel);
-
-					state.config.agent_models = {
-						orchestrator,
-						researcher,
-						critic,
-						"devil-advocate": devilAdvocate,
-					};
-
-					console.log("\n  Per-agent models:");
-					for (const [agent, model] of Object.entries(
-						state.config.agent_models as Record<string, string>,
-					)) {
-						console.log(`    ${agent}: ${model}`);
-					}
-				} else {
-					console.log(`  All agents will use: ${defaultModel}`);
+				if (!perAgent) {
+					note(`All agents will use: ${defaultModel}`, "Council models");
+					return;
 				}
+
+				note(
+					"Each agent can use a different provider/model.\n" +
+						"Format: provider/model-id\n" +
+						"Examples: ollama/nemotron-3-super:cloud, anthropic/claude-sonnet-4-6,\n" +
+						"          openrouter/google/gemini-2.5-pro, openai/gpt-4.1\n" +
+						"Press Enter to use the default.",
+					"Multi-model council",
+				);
+
+				const orchestrator = await ask("Orchestrator model", defaultModel);
+				const researcher = await ask("Researcher model", defaultModel);
+				const critic = await ask("Critic model", defaultModel);
+				const devilAdvocate = await ask("Devil's Advocate model", defaultModel);
+
+				state.config.agent_models = {
+					orchestrator,
+					researcher,
+					critic,
+					"devil-advocate": devilAdvocate,
+				};
+
+				const summary = Object.entries(state.config.agent_models as Record<string, string>)
+					.map(([agent, model]) => `${agent}: ${model}`)
+					.join("\n");
+				note(summary, "Council model assignments");
 			},
 		},
 		{
