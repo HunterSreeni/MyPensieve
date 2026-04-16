@@ -6,6 +6,22 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.0-alpha.4] - 2026-04-16
+
+Phase 4/5: Personality-driven greetings.
+
+### Added
+- **Greetings system** (`src/core/greetings.ts`): `pickGreeting(personality, agentName)` selects a random greeting from `~/.mypensieve/persona/greetings.json` based on the agent's personality style. Supports `{name}` template variable.
+- **Greetings template**: `writeGreetingsTemplate()` scaffolds `greetings.json` with 4 personality pools (formal, casual, snarky, witty) during `mypensieve init`.
+- **Greeting injection**: Extension `before_agent_start` injects a `[Session Greeting]` block on the first turn of each session. Controlled by `config.agent_persona.personality` field. Subsequent turns skip the greeting.
+- **Personality field** added to `AgentPersonaSchema` (optional string, e.g. "formal", "casual", "snarky", "witty").
+- **Wizard**: Agent identity step now prompts for greeting style via select menu.
+
+### Tests
+- 11 new tests for greetings (load, pick, {name} replacement, empty pool, missing file, template creation, no-overwrite). Total suite: 525 tests (was 514).
+
+---
+
 ## [0.2.0-alpha.3] - 2026-04-16
 
 Phase 3/5: Council persona split - protocol in TS, personality in .md files.

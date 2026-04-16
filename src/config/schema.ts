@@ -42,6 +42,8 @@ export const AgentPersonaSchema = z.object({
 	name: z.string().min(1),
 	/** The full identity prompt injected as a system message on every session */
 	identity_prompt: z.string().min(1),
+	/** Personality style key for greeting selection (e.g. "formal", "casual", "snarky") */
+	personality: z.string().optional(),
 	/** When the persona was created/last updated (ISO string) */
 	created_at: z.string().optional(),
 });

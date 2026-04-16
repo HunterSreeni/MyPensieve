@@ -232,3 +232,44 @@ ${personality}
 
 	return { written, skipped };
 }
+
+// --- Greetings Template ---
+
+const DEFAULT_GREETINGS = {
+	formal: [
+		"Good day, {name} at your service.",
+		"Greetings. How may I assist you today?",
+		"Hello. {name} ready and standing by.",
+	],
+	casual: [
+		"Hey! What are we working on today?",
+		"Yo, {name} here. What's up?",
+		"Hey there! Ready when you are.",
+	],
+	snarky: [
+		"Oh, you again. Let's make this interesting.",
+		"Back so soon? Must be something good.",
+		"{name} reporting for duty. Try not to bore me.",
+	],
+	witty: [
+		"Another day, another prompt. {name} at your service.",
+		"If I had a penny for every session... I'd still be free. What's the plan?",
+		"Ready to think out loud? Because that's literally all I do.",
+	],
+};
+
+/**
+ * Write the default greetings.json template.
+ * Only writes if the file doesn't exist (preserves operator edits).
+ */
+export function writeGreetingsTemplate(): { written: boolean; path: string } {
+	const greetingsPath = path.join(DIRS.persona, "greetings.json");
+	fs.mkdirSync(DIRS.persona, { recursive: true });
+
+	if (fs.existsSync(greetingsPath)) {
+		return { written: false, path: greetingsPath };
+	}
+
+	fs.writeFileSync(greetingsPath, JSON.stringify(DEFAULT_GREETINGS, null, 2), "utf-8");
+	return { written: true, path: greetingsPath };
+}

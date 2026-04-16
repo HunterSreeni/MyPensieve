@@ -5,6 +5,7 @@ import { installMyPensieveExtension } from "../init/extension-installer.js";
 import { initGitRepo } from "../init/git-init.js";
 import {
 	writeCouncilPersonaTemplates,
+	writeGreetingsTemplate,
 	writeOperatorTemplate,
 	writePersonaFile,
 	writePersonaTemplate,
@@ -477,34 +478,46 @@ export function createWizardSteps(): WizardStep[] {
 		},
 		{
 			name: "agent_identity",
-			description: "Agent name + persona",
+			description: "Agent name + persona + personality style",
 			run: async (state) => {
-				console.log("\n  Now let's define your agent's identity.\n");
-				console.log("  This controls how the AI introduces itself and interacts with you.");
-				console.log("  You can change this anytime later - or skip and let the agent ask you");
-				console.log("  on your first conversation.\n");
+				note(
+					"This controls how the AI introduces itself and interacts with you.\n" +
+						"You can change this anytime later - or skip and let the agent ask you.",
+					"Agent Identity",
+				);
 
 				const wantNow = await confirm("Define agent identity now?", true);
 
 				if (!wantNow) {
-					console.log("  Skipped - the agent will ask who it should be on first run.");
+					note("The agent will ask who it should be on first run.", "Skipped");
 					state.config.agent_persona = undefined;
 					return;
 				}
 
 				const name = await ask("Agent name (e.g. Pensieve, Jarvis, Nova)", "Pensieve");
 
-				console.log(`\n  Describe ${name}'s personality and role in a few sentences.`);
-				console.log("  Example: 'A concise, no-nonsense assistant that respects my time.");
-				console.log("  Speaks directly, avoids filler, challenges bad ideas politely.'\n");
+				note(
+					"Example: 'A concise, no-nonsense assistant that respects my time.\n" +
+						"Speaks directly, avoids filler, challenges bad ideas politely.'",
+					"Describe personality",
+				);
 
 				const description = await ask(`${name}'s personality/role`, "");
 
 				if (!description) {
-					console.log("  No description provided - the agent will ask on first run.");
+					note("The agent will ask on first run.", "Skipped");
 					state.config.agent_persona = undefined;
 					return;
 				}
+
+				// Personality style for greetings
+				const personalityStyle = await choose(
+					"Greeting style",
+					["formal", "casual", "snarky", "witty", "skip (no greeting variation)"],
+					1,
+				);
+
+				const personality = personalityStyle.startsWith("skip") ? undefined : personalityStyle;
 
 				// Build a proper identity prompt from the name + description
 				const identityPrompt = [
@@ -519,12 +532,14 @@ export function createWizardSteps(): WizardStep[] {
 				state.config.agent_persona = {
 					name,
 					identity_prompt: identityPrompt,
+					personality,
 					created_at: new Date().toISOString(),
 				} satisfies AgentPersona;
 
-				console.log(`\n  Agent identity set: ${name}`);
-				console.log("  You can refine this later via 'mypensieve persona edit'");
-				console.log("  or by telling the agent to change its persona in conversation.");
+				note(
+					`Name: ${name}${personality ? `\nGreeting style: ${personality}` : ""}`,
+					"Agent identity set",
+				);
 			},
 		},
 		{
@@ -589,6 +604,12 @@ export function createWizardSteps(): WizardStep[] {
 				const council = writeCouncilPersonaTemplates();
 				if (council.written.length > 0) {
 					console.log(`  Council persona templates: ${council.written.join(", ")}`);
+				}
+
+				// Write greetings template
+				const greetings = writeGreetingsTemplate();
+				if (greetings.written) {
+					console.log(`  Greetings template written to ${greetings.path}`);
 				}
 
 				const config = buildConfig(state);

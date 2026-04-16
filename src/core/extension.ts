@@ -33,6 +33,7 @@ import { isOperatorTemplate, isPersonaTemplate } from "../init/persona-templates
 import { captureError } from "../ops/index.js";
 import { appendJsonl } from "../utils/jsonl.js";
 import { VERSION } from "../version.js";
+import { pickGreeting } from "./greetings.js";
 import { PERSONA_BOOTSTRAP_PROMPT, buildPersonaSystemPrompt } from "./persona-bootstrap.js";
 import { ECHOES_STATE_PATH } from "./scheduler/index.js";
 
@@ -54,6 +55,7 @@ export function createMyPensieveExtension(overrides?: {
 }): ExtensionFactory {
 	return (pi: ExtensionAPI) => {
 		let config: Config | null = null;
+		let greetingInjected = false;
 		const channelType = overrides?.channelType ?? "cli";
 
 		// --- Session Start ---
@@ -100,9 +102,40 @@ export function createMyPensieveExtension(overrides?: {
 
 		// --- System Prompt Injection (before_agent_start) ---
 		// Fires before every LLM call. We append our persona/bootstrap to the system prompt.
+
+		function buildPersonaBlock(cfg: Config): string {
+			if (cfg.agent_persona && !isPersonaTemplate()) {
+				return buildPersonaSystemPrompt(cfg.agent_persona.identity_prompt, cfg.operator.name);
+			}
+			return PERSONA_BOOTSTRAP_PROMPT;
+		}
+
+		function buildOperatorBlock(): string {
+			if (isOperatorTemplate() || !fs.existsSync(OPERATOR_PERSONA_PATH)) return "";
+			try {
+				const personaMode = fs.statSync(OPERATOR_PERSONA_PATH).mode & 0o777;
+				if ((personaMode & 0o002) !== 0) {
+					console.warn(
+						`[mypensieve] WARNING: Operator persona file is world-writable (mode ${personaMode.toString(8)}). This is a prompt injection risk. Run: chmod 644 ${OPERATOR_PERSONA_PATH}`,
+					);
+				}
+			} catch {
+				// stat failed - non-critical
+			}
+			const operatorPersona = fs.readFileSync(OPERATOR_PERSONA_PATH, "utf-8");
+			return `\n\n[Operator Persona]\n${operatorPersona}`;
+		}
+
+		function buildGreetingBlock(cfg: Config): string {
+			if (greetingInjected || !cfg.agent_persona?.personality) return "";
+			const greeting = pickGreeting(cfg.agent_persona.personality, cfg.agent_persona.name);
+			if (!greeting) return "";
+			greetingInjected = true;
+			return `\n\n[Session Greeting - use this to greet the operator on your first reply]\n${greeting}`;
+		}
+
 		pi.on("before_agent_start", (_event: BeforeAgentStartEvent, _ctx: ExtensionContext) => {
 			if (!config) {
-				// If session_start hasn't fired yet, try loading config now
 				try {
 					config = readConfig(overrides?.configPath);
 				} catch {
@@ -110,43 +143,13 @@ export function createMyPensieveExtension(overrides?: {
 				}
 			}
 
-			let personaBlock: string;
-
-			if (config.agent_persona && !isPersonaTemplate()) {
-				// Established persona - inject identity
-				personaBlock = buildPersonaSystemPrompt(
-					config.agent_persona.identity_prompt,
-					config.operator.name,
-				);
-			} else {
-				// No persona OR template-only - inject bootstrap prompt
-				personaBlock = PERSONA_BOOTSTRAP_PROMPT;
-			}
-
-			// Append operator persona if filled in (with permission check)
-			let operatorBlock = "";
-			if (!isOperatorTemplate() && fs.existsSync(OPERATOR_PERSONA_PATH)) {
-				// Warn if persona file is world-writable (could be poisoned)
-				try {
-					const personaMode = fs.statSync(OPERATOR_PERSONA_PATH).mode & 0o777;
-					if ((personaMode & 0o002) !== 0) {
-						console.warn(
-							`[mypensieve] WARNING: Operator persona file is world-writable (mode ${personaMode.toString(8)}). This is a prompt injection risk. Run: chmod 644 ${OPERATOR_PERSONA_PATH}`,
-						);
-					}
-				} catch {
-					// stat failed - non-critical
-				}
-				const operatorPersona = fs.readFileSync(OPERATOR_PERSONA_PATH, "utf-8");
-				operatorBlock = `\n\n[Operator Persona]\n${operatorPersona}`;
-			}
-
-			// Operational context + directory layout
+			const personaBlock = buildPersonaBlock(config);
+			const operatorBlock = buildOperatorBlock();
+			const greetingBlock = buildGreetingBlock(config);
 			const metaBlock = buildMetaBlock(config);
-
 			const echoBlock = buildEchoBlock(config.operator.timezone);
 
-			const injection = `${personaBlock}${operatorBlock}${metaBlock}${echoBlock}`;
+			const injection = `${personaBlock}${operatorBlock}${greetingBlock}${metaBlock}${echoBlock}`;
 
 			// Append to Pi's existing system prompt
 			return {
