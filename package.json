@@ -1,6 +1,6 @@
 {
   "name": "mypensieve",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "A general-purpose, self-evolving autonomous agent OS with persistent memory across sessions",
   "type": "module",
   "engines": {
@@ -40,8 +40,8 @@
   "author": "Sreenivasan S (Sreeni)",
   "license": "MIT",
   "dependencies": {
-    "@mariozechner/pi-ai": "0.66.1",
-    "@mariozechner/pi-coding-agent": "0.66.1",
+    "@mariozechner/pi-ai": "0.67.3",
+    "@mariozechner/pi-coding-agent": "0.67.3",
     "better-sqlite3": "11.10.0",
     "cron": "4.4.0",
     "grammy": "1.42.0",

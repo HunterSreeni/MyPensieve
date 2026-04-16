@@ -6,6 +6,37 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.16] - 2026-04-16
+
+Pi SDK upgrade + multi-provider infrastructure (v0.2.0 groundwork).
+
+### Changed
+- Upgraded `@mariozechner/pi-ai` and `@mariozechner/pi-coding-agent` from 0.66.1 to 0.67.3
+- Key improvements from Pi 0.67.x:
+  - `session_shutdown` now fires on SIGHUP and SIGTERM (critical for systemd daemon graceful shutdown)
+  - Long-session stack overflow fix (`Container.render()` with large transcripts)
+  - Session IDs now use UUIDv7 for better time locality
+  - npm package update check works with non-default registries
+  - Auto-retry shows live countdown during backoff
+
+### Added
+- **Provider factory** (`src/providers/factory.ts`): `registerProviderByName()` and `registerProviderWithModels()` dispatch registration to the correct provider module. Supports: `ollama`, `anthropic`, `openrouter`, `openai`.
+- **Provider modules** for Anthropic (`src/providers/anthropic.ts`), OpenRouter (`src/providers/openrouter.ts`), and OpenAI (`src/providers/openai.ts`). Each includes a model catalog with correct costs, context windows, and compat flags.
+- **Provider secrets reader** (`src/providers/secrets.ts`): `readProviderApiKey()` reads API keys from `~/.mypensieve/.secrets/{provider}.json` with permission checks (0600 file, 0700 directory).
+- **Provider type contract** (`src/providers/types.ts`): shared `ProviderRegistrationOptions` and `RegisterProviderFn` interfaces.
+
+### Tests
+- 30 new tests (8 factory, 8 secrets, 5 Anthropic, 4 OpenRouter, 5 OpenAI). Total suite: 494 tests (was 464).
+
+### Automation
+- `scripts/on-version.sh` auto-patches KNOWN-LIMITATIONS.md header and validates CHANGELOG.md on every `npm version` bump
+- E2E journal test uses relative dates (no more stale time-dependent failures)
+
+### Note
+Provider modules are registered but not yet wired into channel start files (CLI/Telegram still use Ollama-only path). Channel wiring comes in v0.1.17.
+
+---
+
 ## [0.1.15] - 2026-04-14
 
 Memory extraction pipeline shipped + security hardening pass.
