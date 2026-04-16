@@ -4,6 +4,7 @@ import { scaffoldDirectories } from "../init/directories.js";
 import { installMyPensieveExtension } from "../init/extension-installer.js";
 import { initGitRepo } from "../init/git-init.js";
 import {
+	writeCouncilPersonaTemplates,
 	writeOperatorTemplate,
 	writePersonaFile,
 	writePersonaTemplate,
@@ -582,6 +583,12 @@ export function createWizardSteps(): WizardStep[] {
 				const opTpl = writeOperatorTemplate({ name: op2.name, timezone: op2.timezone });
 				if (opTpl.written) {
 					console.log(`  Operator persona template written to ${opTpl.path}`);
+				}
+
+				// Write council agent persona templates
+				const council = writeCouncilPersonaTemplates();
+				if (council.written.length > 0) {
+					console.log(`  Council persona templates: ${council.written.join(", ")}`);
 				}
 
 				const config = buildConfig(state);

@@ -4,7 +4,9 @@
  * "template-only" vs "real persona defined by the operator".
  */
 import fs from "node:fs";
+import path from "node:path";
 import { AGENT_PERSONA_PATH, DIRS, OPERATOR_PERSONA_PATH } from "../config/paths.js";
+import { DEFAULT_PERSONALITIES } from "../council/personas.js";
 
 /** Marker string embedded in the template - used to detect "not yet personalized" */
 export const PERSONA_TEMPLATE_MARKER = "<!-- TEMPLATE: awaiting operator personalization -->";
@@ -182,4 +184,51 @@ ${sections.context ?? "- (builds over time)"}
 
 	fs.mkdirSync(DIRS.persona, { recursive: true });
 	fs.writeFileSync(OPERATOR_PERSONA_PATH, content, "utf-8");
+}
+
+// --- Council Persona Templates ---
+
+const COUNCIL_AGENTS = ["orchestrator", "researcher", "critic", "devil-advocate"];
+
+/**
+ * Write council agent persona templates.
+ * Creates ~/.mypensieve/persona/{agent-name}.md for each council agent.
+ * Only writes if the file doesn't already exist (preserves operator edits).
+ *
+ * Returns the list of files written.
+ */
+export function writeCouncilPersonaTemplates(): { written: string[]; skipped: string[] } {
+	fs.mkdirSync(DIRS.persona, { recursive: true });
+	const written: string[] = [];
+	const skipped: string[] = [];
+
+	for (const agentName of COUNCIL_AGENTS) {
+		const filePath = path.join(DIRS.persona, `${agentName}.md`);
+		if (fs.existsSync(filePath)) {
+			skipped.push(agentName);
+			continue;
+		}
+
+		const personality = DEFAULT_PERSONALITIES[agentName] ?? "";
+		const content = `${PERSONA_TEMPLATE_MARKER}
+# ${agentName.charAt(0).toUpperCase() + agentName.slice(1)} - Council Agent Personality
+
+> This file defines the PERSONALITY of the ${agentName} council agent.
+> Edit freely to change tone, strictness, focus areas, communication style.
+> Protocol behavior (phase participation, structured channels) is hardcoded
+> and cannot be broken by editing this file.
+
+${personality}
+
+## Notes
+- Edit this file anytime to reshape this agent's personality
+- Protocol behavior (phase rules, verb access) stays in code
+- Changes take effect on next council deliberation
+`;
+
+		fs.writeFileSync(filePath, content, "utf-8");
+		written.push(agentName);
+	}
+
+	return { written, skipped };
 }

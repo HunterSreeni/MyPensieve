@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { CouncilResult } from "../memory/types.js";
+import { loadCouncilPersonality } from "./personality-loader.js";
 
 export type SpeakerMode = "phase-driven" | "round_robin" | "auto" | "manual";
 
@@ -74,9 +75,18 @@ export class CouncilManager {
 				const agent = this.config.agents.find((a) => a.name === speaker);
 				if (!agent) continue;
 
+				// Build the full prompt: protocol (from TS) + personality (from .md or default)
+				const personality = loadCouncilPersonality(agent.name);
+				const fullAgent: AgentPersona = {
+					...agent,
+					systemPrompt: personality
+						? `${agent.systemPrompt}\n\n[Personality]\n${personality}`
+						: agent.systemPrompt,
+				};
+
 				// Get agent response (real = pi-ai.complete, test = mock)
 				const content = agentResponder
-					? await agentResponder(agent, this.transcript, phase)
+					? await agentResponder(fullAgent, this.transcript, phase)
 					: `[${agent.name}] Response for phase "${phase}" on topic "${this.config.topic}"`;
 
 				const turn: AgentTurn = {

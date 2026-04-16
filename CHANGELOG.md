@@ -6,6 +6,27 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.0-alpha.3] - 2026-04-16
+
+Phase 3/5: Council persona split - protocol in TS, personality in .md files.
+
+### Added
+- **Personality loader** (`src/council/personality-loader.ts`): `loadCouncilPersonality(agentName)` reads from `~/.mypensieve/persona/{agent-name}.md`, falls back to hardcoded defaults, caches per process.
+- **Council persona templates**: `writeCouncilPersonaTemplates()` scaffolds 4 .md files during `mypensieve init` (orchestrator, researcher, critic, devil-advocate). Only writes if file doesn't exist (preserves operator edits).
+- `DEFAULT_PERSONALITIES` export in `personas.ts` - the editable personality text for each agent.
+
+### Changed
+- **Persona split**: Each council agent now has two layers:
+  - Protocol (hardcoded in TS): phase participation, verb access, structured channels. Cannot be broken by editing.
+  - Personality (in .md files): tone, strictness, focus areas. Operator edits freely.
+- **CouncilManager.deliberate()** now assembles full prompt as `protocol + [Personality] + loaded personality text` before calling the agent responder.
+- `personas.ts` `systemPrompt` fields now contain ONLY protocol instructions (prefixed with `[Protocol: AgentName]`).
+
+### Tests
+- 9 new tests for personality loader (file loading, template detection, caching, cache clearing, all 4 agents) and council persona templates (creation, skip existing). Total suite: 514 tests (was 505).
+
+---
+
 ## [0.2.0-alpha.2] - 2026-04-16
 
 Phase 2/5: Multi-model council registration.
