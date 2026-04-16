@@ -15,7 +15,9 @@ import { savePersonaTool } from "../../core/tools/persona-tool.js";
 import { validateChannelBinding } from "../../gateway/binding-validator.js";
 import { isPersonaTemplate } from "../../init/persona-templates.js";
 import { captureError, withCapture } from "../../ops/index.js";
-import { getOllamaHost, registerOllamaProvider } from "../../providers/ollama.js";
+import { isProviderSupported, registerProviderByName } from "../../providers/factory.js";
+import { getOllamaHost } from "../../providers/ollama.js";
+import { readProviderApiKey } from "../../providers/secrets.js";
 
 /**
  * Start an interactive CLI session.
@@ -101,23 +103,41 @@ export async function startCliSession(opts?: { configPath?: string }): Promise<v
 		return;
 	}
 
-	if (provider !== "ollama") {
+	if (!isProviderSupported(provider)) {
 		captureError({
 			severity: "high",
 			errorType: "provider_unsupported",
 			errorSrc: "start:model",
-			message: `Provider '${provider}' is not wired up yet`,
+			message: `Provider '${provider}' is not supported`,
 			context: { provider, modelId, modelString },
 		});
 		console.error(
-			`Provider '${provider}' is not wired up yet. Only 'ollama' is supported in this build.`,
+			`Provider '${provider}' is not supported. Supported: ollama, anthropic, openrouter, openai.`,
 		);
-		console.error("Run 'mypensieve init --restart' to pick an Ollama Cloud model.");
+		console.error("Run 'mypensieve init --restart' to pick a supported provider/model.");
 		process.exitCode = 1;
 		return;
 	}
 
-	const ollamaHost = getOllamaHost();
+	// Resolve API key for non-Ollama providers
+	let apiKey = "";
+	if (provider !== "ollama") {
+		try {
+			apiKey = readProviderApiKey(provider);
+		} catch (err) {
+			const e = err instanceof Error ? err : new Error(String(err));
+			captureError({
+				severity: "critical",
+				errorType: "provider_apikey",
+				errorSrc: "start:apikey",
+				message: e.message,
+				context: { provider },
+			});
+			console.error(e.message);
+			process.exitCode = 1;
+			return;
+		}
+	}
 
 	// Step 4: Build Pi runtime factory.
 	// The factory runs once for the initial session and again on /new, /resume,
@@ -142,20 +162,20 @@ export async function startCliSession(opts?: { configPath?: string }): Promise<v
 
 		await withCapture(
 			{
-				errorSrc: "start:register-ollama",
+				errorSrc: "start:register-provider",
 				errorType: "provider_registration",
 				severity: "critical",
-				context: { host: ollamaHost, modelId },
+				context: { provider, modelId },
 			},
 			async () => {
-				registerOllamaProvider(services.modelRegistry, ollamaHost, modelId);
+				registerProviderByName(provider, services.modelRegistry, modelId, apiKey);
 			},
 		);
 
 		const model = services.modelRegistry.find(provider, modelId);
 		if (!model) {
 			const err = new Error(
-				`Model ${provider}/${modelId} not found in registry after registration. This is a bug in the Ollama provider registration.`,
+				`Model ${provider}/${modelId} not found in registry after registration. This is a bug in the ${provider} provider registration.`,
 			);
 			captureError({
 				severity: "critical",
@@ -208,7 +228,7 @@ export async function startCliSession(opts?: { configPath?: string }): Promise<v
 			errorSrc: "start:runtime",
 			message: e.message,
 			stack: e.stack,
-			context: { cwd, agentDir, host: ollamaHost, modelId },
+			context: { cwd, agentDir, provider, modelId },
 		});
 		console.error("[mypensieve] Failed to create agent runtime:", e.message);
 		process.exitCode = 1;
@@ -241,7 +261,8 @@ export async function startCliSession(opts?: { configPath?: string }): Promise<v
 	// Install filesystem security guardrails
 	runtime.session.agent.beforeToolCall = createToolGuard(cwd);
 
-	console.log(`[mypensieve] Model: ${modelString} via ${ollamaHost}`);
+	const hostInfo = provider === "ollama" ? ` via ${getOllamaHost()}` : "";
+	console.log(`[mypensieve] Model: ${modelString}${hostInfo}`);
 	console.log("[mypensieve] Entering Pi interactive mode. Ctrl+C to exit.");
 
 	// Step 6: Hand off to Pi's interactive TUI.
@@ -255,7 +276,7 @@ export async function startCliSession(opts?: { configPath?: string }): Promise<v
 			errorSrc: "start:interactive-mode",
 			errorType: "runtime_tui",
 			severity: "critical",
-			context: { modelString, host: ollamaHost },
+			context: { modelString, provider },
 		},
 		() => interactiveMode.run(),
 	);

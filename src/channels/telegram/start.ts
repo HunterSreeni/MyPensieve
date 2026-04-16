@@ -27,7 +27,9 @@ import { savePersonaTool } from "../../core/tools/persona-tool.js";
 import { validateChannelBinding } from "../../gateway/binding-validator.js";
 import { isPersonaTemplate } from "../../init/persona-templates.js";
 import { captureError, withCapture } from "../../ops/index.js";
-import { getOllamaHost, registerOllamaProvider } from "../../providers/ollama.js";
+import { isProviderSupported, registerProviderByName } from "../../providers/factory.js";
+import { getOllamaHost } from "../../providers/ollama.js";
+import { readProviderApiKey } from "../../providers/secrets.js";
 import { VERSION } from "../../version.js";
 import { chunkMessage, sanitizeOutput, toTelegramMarkdown } from "./formatter.js";
 import { PeerRateLimiter } from "./rate-limiter.js";
@@ -176,12 +178,32 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 		return;
 	}
 
-	if (provider !== "ollama") {
+	if (!isProviderSupported(provider)) {
 		console.error(
-			`Provider '${provider}' is not supported yet. Only 'ollama' works in this build.`,
+			`Provider '${provider}' is not supported. Supported: ollama, anthropic, openrouter, openai.`,
 		);
 		process.exitCode = 1;
 		return;
+	}
+
+	// Resolve API key for non-Ollama providers
+	let apiKey = "";
+	if (provider !== "ollama") {
+		try {
+			apiKey = readProviderApiKey(provider);
+		} catch (err) {
+			const e = err instanceof Error ? err : new Error(String(err));
+			captureError({
+				severity: "critical",
+				errorType: "provider_apikey",
+				errorSrc: "telegram:apikey",
+				message: e.message,
+				context: { provider },
+			});
+			console.error(e.message);
+			process.exitCode = 1;
+			return;
+		}
 	}
 
 	// Step 4: Read bot token
@@ -214,7 +236,6 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 	}
 
 	// Step 6: Create the Pi agent runtime factory (shared across peers)
-	const ollamaHost = getOllamaHost();
 	const authStorage = AuthStorage.create();
 	const cwd = process.cwd();
 	const agentDir = PI_DIRS.root;
@@ -251,13 +272,13 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 
 			await withCapture(
 				{
-					errorSrc: "telegram:register-ollama",
+					errorSrc: "telegram:register-provider",
 					errorType: "provider_registration",
 					severity: "critical",
-					context: { host: ollamaHost, modelId },
+					context: { provider, modelId },
 				},
 				async () => {
-					registerOllamaProvider(services.modelRegistry, ollamaHost, modelId);
+					registerProviderByName(provider, services.modelRegistry, modelId, apiKey);
 				},
 			);
 
@@ -586,7 +607,8 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 	process.on("SIGTERM", shutdown);
 
 	// Step 8: Start long-polling
-	console.log(`[telegram] Model: ${modelString} via ${ollamaHost}`);
+	const hostInfo = provider === "ollama" ? ` via ${getOllamaHost()}` : "";
+	console.log(`[telegram] Model: ${modelString}${hostInfo}`);
 	console.log(`[telegram] Allowed peers: ${allowedPeers.join(", ")}`);
 	console.log("[telegram] Bot starting long-polling... Ctrl+C to stop.");
 

@@ -6,6 +6,23 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.18] - 2026-04-16
+
+Multi-provider channels - Anthropic, OpenRouter, and OpenAI now work in CLI and Telegram.
+
+### Changed
+- **CLI channel** (`src/channels/cli/start.ts`): Removed Ollama-only guard. Provider registration now dispatches through the factory (`registerProviderByName`). API keys read from `.secrets/{provider}.json` for non-Ollama providers.
+- **Telegram channel** (`src/channels/telegram/start.ts`): Same changes. Per-peer sessions now support any registered provider.
+- Log output shows `Model: provider/model` for all providers. Ollama additionally shows `via host:port`.
+- Error messages updated: unsupported provider now lists all 4 supported options.
+
+### Note
+To use a non-Ollama provider:
+1. Run `mypensieve init --restart` and pick the provider (wizard multi-provider menu comes in a later patch)
+2. Or manually: set `default_model` to e.g. `anthropic/claude-sonnet-4-6` in config.json and create `~/.mypensieve/.secrets/anthropic.json` with `{"api_key":"sk-ant-..."}`.
+
+---
+
 ## [0.1.17] - 2026-04-16
 
 Ops automation - version update checks and auto-doctor timer.

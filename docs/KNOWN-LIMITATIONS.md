@@ -1,5 +1,5 @@
 # MyPensieve - Known Limitations
-> Last updated: 2026-04-16 (v0.1.17)
+> Last updated: 2026-04-16 (v0.1.18)
 
 These are honest disclaimers about what works, what doesn't, and what to expect.
 
@@ -16,10 +16,11 @@ These are honest disclaimers about what works, what doesn't, and what to expect.
 
 ## Model Dependency
 
-- Currently **only Ollama provider** is wired (v0.1.x)
-- Cloud models require `ollama signin` with an NVIDIA account
-- Local models require sufficient VRAM (7B = ~4GB, 13B = ~8GB, 70B = ~40GB)
-- No OpenRouter/Anthropic/OpenAI support yet (planned for v0.2.0)
+- **Supported providers** (v0.1.18+): Ollama, Anthropic, OpenRouter, OpenAI
+- Ollama cloud models require `ollama signin` with an NVIDIA account
+- Ollama local models require sufficient VRAM (7B = ~4GB, 13B = ~8GB, 70B = ~40GB)
+- Non-Ollama providers require API keys in `~/.mypensieve/.secrets/{provider}.json`
+- Wizard multi-provider menu not yet implemented - manual config edit required for non-Ollama providers
 - Model quality varies - smaller models may not follow the persona prompt or security rules well
 
 ## Platform Support
