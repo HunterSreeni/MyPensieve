@@ -34,17 +34,32 @@ export function loadCouncilPersonality(agentName: string): string {
 	const filePath = path.join(DIRS.persona, `${agentName}.md`);
 	let personality: string;
 
+	const fallback = DEFAULT_PERSONALITIES[agentName] ?? "";
+
 	if (fs.existsSync(filePath)) {
-		const content = fs.readFileSync(filePath, "utf-8");
-		if (!content.includes(PERSONA_TEMPLATE_MARKER)) {
-			// Real personality file - use it
-			personality = content.trim();
-		} else {
-			// Still a template - fall back to default
-			personality = DEFAULT_PERSONALITIES[agentName] ?? "";
+		// Size cap: skip files > 100KB to prevent OOM from malicious/runaway files
+		try {
+			const stat = fs.statSync(filePath);
+			if (stat.size > 100_000) {
+				console.warn(
+					`[mypensieve] WARNING: Personality file ${filePath} is ${stat.size} bytes (max 100KB). Using default.`,
+				);
+				personality = fallback;
+			} else {
+				const content = fs.readFileSync(filePath, "utf-8");
+				const trimmed = content.trim();
+				if (!trimmed || content.includes(PERSONA_TEMPLATE_MARKER)) {
+					// Empty file or template - fall back to default
+					personality = fallback;
+				} else {
+					personality = trimmed;
+				}
+			}
+		} catch {
+			personality = fallback;
 		}
 	} else {
-		personality = DEFAULT_PERSONALITIES[agentName] ?? "";
+		personality = fallback;
 	}
 
 	cache.set(agentName, personality);

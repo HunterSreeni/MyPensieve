@@ -29,7 +29,19 @@ const GREETINGS_PATH = path.join(DIRS.persona, "greetings.json");
 export function loadGreetings(): GreetingsConfig {
 	if (!fs.existsSync(GREETINGS_PATH)) return {};
 	try {
-		return JSON.parse(fs.readFileSync(GREETINGS_PATH, "utf-8")) as GreetingsConfig;
+		// Size cap: skip files > 1MB to prevent OOM
+		const stat = fs.statSync(GREETINGS_PATH);
+		if (stat.size > 1_000_000) return {};
+
+		const parsed = JSON.parse(fs.readFileSync(GREETINGS_PATH, "utf-8")) as Record<string, unknown>;
+		// Validate: only keep entries where value is a string array
+		const result: GreetingsConfig = {};
+		for (const [key, val] of Object.entries(parsed)) {
+			if (Array.isArray(val) && val.every((v) => typeof v === "string")) {
+				result[key] = val as string[];
+			}
+		}
+		return result;
 	} catch {
 		return {};
 	}

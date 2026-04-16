@@ -81,8 +81,12 @@ export function sanitizeOutput(text: string): string {
 		text
 			// Telegram bot tokens (numeric_id:alphanumeric_hash)
 			.replace(/\d{8,}:[A-Za-z0-9_-]{30,}/g, "[BOT_TOKEN_REDACTED]")
-			// OpenAI-style API keys
+			// Anthropic API keys (sk-ant-api03-...)
+			.replace(/sk-ant-[a-zA-Z0-9_-]{20,}/g, "sk-ant-[REDACTED]")
+			// OpenAI API keys (sk-proj-..., sk-...)
 			.replace(/sk-[a-zA-Z0-9]{20,}/g, "sk-[REDACTED]")
+			// OpenRouter API keys (sk-or-v1-...)
+			.replace(/sk-or-[a-zA-Z0-9_-]{20,}/g, "sk-or-[REDACTED]")
 			// Generic API key patterns in JSON/config output
 			.replace(
 				/("(?:bot_token|api_key|secret_key|access_token|password|auth_token)")\s*:\s*"[^"]+"/gi,
