@@ -137,7 +137,16 @@ export const DEFAULT_ROUTING_TABLES: Record<VerbName, RoutingTable> = {
 		verb: "dispatch",
 		default_target: "gh-cli",
 		default_target_type: "mcp",
-		rules: [],
+		rules: [
+			{
+				name: "memory-extract",
+				target: "memory-extract",
+				target_type: "skill",
+				match: { field: "action", value: "memory.extract" },
+				priority: 10,
+				enabled: true,
+			},
+		],
 	},
 	notify: {
 		verb: "notify",

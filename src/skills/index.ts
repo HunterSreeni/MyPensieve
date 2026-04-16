@@ -7,6 +7,7 @@ export {
 } from "./executor.js";
 export { createDefaultRegistry } from "./registry.js";
 export { dailyLogHandler } from "./daily-log.js";
+export { memoryExtractHandler } from "./memory-extract.js";
 export { memoryRecallHandler } from "./memory-recall.js";
 export { researcherHandler } from "./researcher.js";
 export { imageEditHandler, videoEditHandler, audioEditHandler } from "./media.js";

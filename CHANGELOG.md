@@ -6,6 +6,32 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.15] - 2026-04-14
+
+Memory extraction pipeline shipped + security hardening pass.
+
+### Added
+- Memory extraction pipeline (Phase 2 kick-off):
+  - `src/memory/extractor.ts` - `runExtraction()` reads Pi session JSONLs, distills them into decisions / threads / persona deltas via Ollama, writes to the existing layers.
+  - `src/memory/session-reader.ts` - enumerates, filters by timestamp, and normalizes Pi sessions.
+  - `src/providers/ollama-complete.ts` - one-shot non-streaming `/api/chat` wrapper with `format: "json"`.
+  - Anchor checkpoint at `<projectsDir>/.extractor-anchor.json` for idempotent incremental runs across all bindings.
+- CLI: `mypensieve extract [--all] [--since <iso>] [--dry-run] [--verbose]`.
+- CLI: `mypensieve extractor install | uninstall | status` - systemd user timer driven by `config.extractor.cron` (default `0 2 * * *`).
+- Agent-facing `memory-extract` skill, reachable via the `dispatch` verb with `action: "memory.extract"`. Default skill registry grows from 9 to 10 skills.
+
+### Security (hardening from internal audit of the new memory surface)
+- `dispatch`-mode invocations of the memory-extract skill now strip underscore-prefixed params (`_sessionsDir`, `_projectsDir`, `_complete`). These test hooks are honored only on direct handler calls, closing an arbitrary-path read/write path that a remote peer could otherwise reach via Telegram `dispatch`.
+- Session transcripts are passed through `redactSecrets` before being embedded in the extraction prompt, preventing bot tokens, bearer tokens, and API keys that appeared in prior tool outputs from leaking into the LLM prompt.
+- `runExtraction` acquires a pidfile lock at `<projectsDir>/.extractor.lock`. Concurrent runs (manual + systemd timer, or two remote triggers) no longer race; the second caller returns immediately with an `already in progress` failure. Stale locks (dead pid) are reclaimed.
+- Session JSONL files larger than 50 MB (`MAX_SESSION_JSONL_BYTES`) are skipped before being read into memory, preventing OOM from a runaway or malicious transcript.
+- Ollama completions are truncated at 256 KB (`MAX_COMPLETION_BYTES`) before `JSON.parse`, capping downstream parse work from a misbehaving model.
+
+### Tests
+- 32 new tests covering the extractor, skill wiring, and security regressions (17 unit + 2 integration + 1 e2e + 5 skill + 7 security). Total suite: 464 tests (was 432).
+
+---
+
 ## [0.1.14] - 2026-04-13
 
 Systemd daemon - MyPensieve runs as a persistent background service.

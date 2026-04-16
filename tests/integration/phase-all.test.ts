@@ -386,11 +386,12 @@ describe("Phase 10: Full MVP Integration", () => {
 		]);
 	});
 
-	it("default skill registry has all 9 skills", () => {
+	it("default skill registry has all MVP skills", () => {
 		const registry = createDefaultRegistry();
-		expect(registry.list()).toHaveLength(9);
+		expect(registry.list()).toHaveLength(10);
 		expect(registry.has("daily-log")).toBe(true);
 		expect(registry.has("memory-recall")).toBe(true);
+		expect(registry.has("memory-extract")).toBe(true);
 		expect(registry.has("researcher")).toBe(true);
 		expect(registry.has("cve-monitor")).toBe(true);
 		expect(registry.has("blog-seo")).toBe(true);

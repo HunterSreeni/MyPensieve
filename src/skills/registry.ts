@@ -1,6 +1,7 @@
 import { dailyLogHandler } from "./daily-log.js";
 import { SkillRegistry } from "./executor.js";
 import { audioEditHandler, imageEditHandler, videoEditHandler } from "./media.js";
+import { memoryExtractHandler } from "./memory-extract.js";
 import { memoryRecallHandler } from "./memory-recall.js";
 import { researcherHandler } from "./researcher.js";
 import { blogSeoHandler, cveMonitorHandler, playwrightCliHandler } from "./security.js";
@@ -14,6 +15,7 @@ export function createDefaultRegistry(): SkillRegistry {
 	// Core skills
 	registry.register("daily-log", dailyLogHandler);
 	registry.register("memory-recall", memoryRecallHandler);
+	registry.register("memory-extract", memoryExtractHandler);
 	registry.register("researcher", researcherHandler);
 
 	// Media skills

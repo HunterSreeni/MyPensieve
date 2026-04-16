@@ -332,12 +332,18 @@ describe("E2E: Daily journal lifecycle", () => {
 		const { dispatcher, project, binding } = setupSession(tmp());
 		const ctx = { channelType: "cli" as const, project: binding };
 
+		// Use relative dates so the review window never goes stale
+		const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+		const day1Date = daysAgo(3);
+		const day2Date = daysAgo(2);
+		const day3Date = daysAgo(1);
+
 		// Day 1
 		await dispatcher.dispatch(
 			"journal",
 			{
 				action: "write",
-				date: "2026-04-07",
+				date: day1Date,
 				entry: {
 					wins: ["locked architecture"],
 					blockers: [],
@@ -357,7 +363,7 @@ describe("E2E: Daily journal lifecycle", () => {
 			"journal",
 			{
 				action: "write",
-				date: "2026-04-08",
+				date: day2Date,
 				entry: {
 					wins: ["built Phase 1-5"],
 					blockers: ["waiting for re-audit"],
@@ -377,7 +383,7 @@ describe("E2E: Daily journal lifecycle", () => {
 			"journal",
 			{
 				action: "write",
-				date: "2026-04-09",
+				date: day3Date,
 				entry: {
 					wins: ["completed all 10 phases"],
 					blockers: [],
@@ -393,7 +399,7 @@ describe("E2E: Daily journal lifecycle", () => {
 		);
 
 		// Read back a specific day
-		const day2 = await dispatcher.dispatch("journal", { action: "read", date: "2026-04-08" }, ctx);
+		const day2 = await dispatcher.dispatch("journal", { action: "read", date: day2Date }, ctx);
 		const entry = day2.result as DailyLogEntry;
 		expect(entry.wins).toContain("built Phase 1-5");
 		expect(entry.mood_score).toBe(4);

@@ -108,12 +108,13 @@ describe("SkillRegistry", () => {
 });
 
 describe("Default registry", () => {
-	it("has all 9 MVP skills registered", () => {
+	it("has all MVP skills registered", () => {
 		const registry = createDefaultRegistry();
 		const skills = registry.list();
 
 		expect(skills).toContain("daily-log");
 		expect(skills).toContain("memory-recall");
+		expect(skills).toContain("memory-extract");
 		expect(skills).toContain("researcher");
 		expect(skills).toContain("image-edit");
 		expect(skills).toContain("video-edit");
@@ -121,7 +122,7 @@ describe("Default registry", () => {
 		expect(skills).toContain("cve-monitor");
 		expect(skills).toContain("blog-seo");
 		expect(skills).toContain("playwright-cli");
-		expect(skills).toHaveLength(9);
+		expect(skills).toHaveLength(10);
 	});
 });
 

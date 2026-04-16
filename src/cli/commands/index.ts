@@ -1,3 +1,4 @@
+import path from "node:path";
 import { startCliSession } from "../../channels/cli/start.js";
 import { VERSION } from "../../version.js";
 import { registerCommand } from "../router.js";
@@ -259,10 +260,86 @@ registerCommand({
 });
 
 registerCommand({
+	name: "extractor",
+	description: "Manage the nightly memory extractor systemd timer",
+	usage: "mypensieve extractor install|uninstall|status",
+	run: async (args) => {
+		const subcommand = args[0];
+		if (!subcommand || !["install", "uninstall", "status"].includes(subcommand)) {
+			console.error("Usage: mypensieve extractor install|uninstall|status");
+			console.error("");
+			console.error("  install    Create and start the systemd extractor timer");
+			console.error("  uninstall  Stop and remove the timer");
+			console.error("  status     Show timer status and next run time");
+			process.exitCode = 1;
+			return;
+		}
+		const { installExtractorTimer, uninstallExtractorTimer, extractorTimerStatus } = await import(
+			"./extractor-timer.js"
+		);
+		switch (subcommand) {
+			case "install":
+				await installExtractorTimer();
+				break;
+			case "uninstall":
+				await uninstallExtractorTimer();
+				break;
+			case "status":
+				await extractorTimerStatus();
+				break;
+		}
+	},
+});
+
+registerCommand({
 	name: "extract",
 	description: "Manually run the memory extractor on recent sessions",
-	usage: "mypensieve extract [--all]",
-	run: async (_args) => {
-		console.log("Manual extractor coming in v0.2.0.");
+	usage: "mypensieve extract [--all] [--since <iso>] [--dry-run] [--verbose]",
+	run: async (args) => {
+		const { readConfig } = await import("../../config/index.js");
+		const { runExtraction } = await import("../../memory/extractor.js");
+
+		let config: import("../../config/schema.js").Config;
+		try {
+			config = readConfig();
+		} catch {
+			console.error("No config found. Run 'mypensieve init' first.");
+			process.exitCode = 1;
+			return;
+		}
+
+		const flag = (name: string) => args.includes(`--${name}`);
+		const flagValue = (name: string): string | undefined => {
+			const eq = args.find((a) => a.startsWith(`--${name}=`));
+			if (eq) return eq.slice(name.length + 3);
+			const idx = args.indexOf(`--${name}`);
+			if (idx >= 0 && idx + 1 < args.length && !args[idx + 1]?.startsWith("--")) {
+				return args[idx + 1];
+			}
+			return undefined;
+		};
+
+		const result = await runExtraction({
+			config,
+			resetCheckpoint: flag("all") || flag("reset-checkpoint"),
+			since: flagValue("since"),
+			dryRun: flag("dry-run"),
+			verbose: flag("verbose") || flag("v"),
+		});
+
+		console.log("\nExtraction complete:");
+		console.log(`  Sessions processed: ${result.processedSessions}`);
+		console.log(`  Sessions skipped:   ${result.skippedSessions}`);
+		console.log(`  Decisions added:    ${result.decisionsAdded}`);
+		console.log(`  Threads added:      ${result.threadsAdded}`);
+		console.log(`  Persona deltas:     ${result.personaDeltasAdded}`);
+		if (result.dryRun) console.log("  (dry-run - no writes)");
+		if (result.failures.length > 0) {
+			console.log(`  Failures:           ${result.failures.length}`);
+			for (const f of result.failures.slice(0, 5)) {
+				console.log(`    - ${path.basename(f.sessionPath)}: ${f.error}`);
+			}
+			process.exitCode = 1;
+		}
 	},
 });

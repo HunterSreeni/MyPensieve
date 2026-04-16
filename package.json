@@ -1,6 +1,6 @@
 {
   "name": "mypensieve",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "A general-purpose, self-evolving autonomous agent OS with persistent memory across sessions",
   "type": "module",
   "engines": {
@@ -25,6 +25,7 @@
     "lint:fix": "biome check --write src/ tests/",
     "format": "biome format --write src/ tests/",
     "check": "biome check src/ tests/ && tsc --noEmit && vitest run",
+    "version": "bash scripts/on-version.sh",
     "prepublishOnly": "npm run check && npm run build",
     "prepare": "husky"
   },
