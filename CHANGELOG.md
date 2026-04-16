@@ -6,6 +6,36 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.0] - 2026-04-16
+
+v0.2.0 stable release - multi-provider, multi-model council, persona split, personality-driven greetings.
+
+### Highlights
+- **Multi-provider support**: Ollama, Anthropic, OpenRouter, OpenAI - all 4 providers wired end-to-end (wizard, channels, council)
+- **Multi-model council**: Different council agents can use different providers/models
+- **Council persona split**: Protocol locked in TypeScript, personality editable in .md files
+- **Personality-driven greetings**: Randomized greetings from personality-keyed pools
+- **Wizard TUI overhaul**: @clack/prompts replaces raw readline - select, confirm, spinner, note boxes
+- **Pi SDK 0.67.3**: SIGTERM session shutdown, stack overflow fix, UUIDv7 session IDs
+- **Ops automation**: Version update check on CLI startup, auto-doctor timer (every 3 days), version script
+
+### Security (hardening from pre-release audit)
+- Telegram sanitizer: added Anthropic (sk-ant-) and OpenRouter (sk-or-) API key patterns
+- Empty .md persona files fall back to defaults (no silent empty personality)
+- Greetings.json validates array types, rejects non-array values
+- Size caps: 100KB for persona .md files, 1MB for greetings.json
+
+### Stats
+- 525 tests across 42 test files (was 464 at v0.1.15)
+- 61 new tests added during v0.2.0 development
+
+### Deferred to v0.3.0
+- MCP integration (Pi has no built-in MCP - needs custom tool registration via pi.registerTool)
+- Echo wiring (daily-log, backup)
+- Dispatch confirm enforcement
+
+---
+
 ## [0.2.0-alpha.4] - 2026-04-16
 
 Phase 4/5: Personality-driven greetings.

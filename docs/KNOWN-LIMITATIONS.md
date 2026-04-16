@@ -1,5 +1,5 @@
 # MyPensieve - Known Limitations
-> Last updated: 2026-04-16 (v0.2.0-alpha.4)
+> Last updated: 2026-04-16 (v0.2.0)
 
 These are honest disclaimers about what works, what doesn't, and what to expect.
 
@@ -58,12 +58,12 @@ These are honest disclaimers about what works, what doesn't, and what to expect.
 
 - Echoes only run while `mypensieve start` is running
 - If the process stops, no scheduled tasks fire until restarted
-- The daily-log and backup echoes are registered but **not yet wired** to actual skills (v0.2.0)
+- The daily-log and backup echoes are registered but **not yet wired** to actual skills (planned v0.3.0)
 - The memory extractor is wired (`mypensieve extract` + `mypensieve extractor install` systemd timer), but only the `ollama` provider is supported as the extraction model. OpenRouter / Anthropic / OpenAI extraction support is planned for v0.2.0
 - Extracted records are tagged `source: "auto"` with `confidence: 0.65`. Manual `/decide` records keep their higher `0.95` confidence
 - The extractor holds a pidfile lock at `<projectsDir>/.extractor.lock`; concurrent runs return immediately rather than queueing. If the process is hard-killed the lock is reclaimed on the next run when the recorded pid is no longer alive
 - Session JSONL files above 50 MB are skipped - the extractor silently ignores them to avoid OOM. If you have a legitimately huge session, split it or raise `MAX_SESSION_JSONL_BYTES`
-- Dispatch-level `confirm: true` is accepted by the schema but not yet enforced at the dispatcher. `memory.extract` is not destructive (it only appends), but treat this as a general caveat until v0.2.0 wires confirmation to a channel prompt
+- Dispatch-level `confirm: true` is accepted by the schema but not yet enforced at the dispatcher (planned v0.3.0)
 - Agent can report on echoes but cannot yet trigger them manually
 
 ## Deprecated Transitive Dependencies (cosmetic warnings on install)
