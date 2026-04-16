@@ -6,6 +6,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.0-alpha.1] - 2026-04-16
+
+Phase 1/5: Wizard multi-provider menu + TUI upgrade (@clack/prompts).
+
+### Added
+- **@clack/prompts v1.2.0** replaces raw readline in the wizard. Beautiful select/confirm/text prompts with intro/outro banners, spinner for async operations, and note boxes for summaries.
+- **Multi-provider wizard**: `mypensieve init` now lets you choose between Ollama, Anthropic, OpenRouter, and OpenAI. Non-Ollama providers prompt for API key with validation probe, save to `.secrets/{provider}.json`, and prompt for model ID with provider-specific hints.
+- Wizard UI improvements: intro banner, note boxes for config summary, spinner for Ollama probe and API key validation, outro with next steps.
+
+### Changed
+- `src/wizard/prompt.ts` fully rewritten: `ask`, `confirm`, `choose` now use @clack/prompts. New exports: `multiselect`, `spin`, `intro`, `outro`, `note`.
+- `src/wizard/steps.ts` providers step rewritten for multi-provider flow.
+
+---
+
 ## [0.1.18] - 2026-04-16
 
 Multi-provider channels - Anthropic, OpenRouter, and OpenAI now work in CLI and Telegram.

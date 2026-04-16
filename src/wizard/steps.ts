@@ -18,7 +18,241 @@ import {
 	renderOllamaSetupHelp,
 } from "../providers/ollama.js";
 import type { WizardStep } from "./framework.js";
-import { ask, choose, closePrompt, confirm } from "./prompt.js";
+import { ask, choose, closePrompt, confirm, intro, note, outro, spin } from "./prompt.js";
+
+// --- Provider setup helpers ---
+
+const PROVIDER_MODEL_HINTS: Record<string, string> = {
+	anthropic: "claude-sonnet-4-6",
+	openrouter: "anthropic/claude-sonnet-4-6",
+	openai: "gpt-4.1",
+};
+
+async function setupOllamaProvider(state: { config: Record<string, unknown> }): Promise<void> {
+	const host = getOllamaHost();
+
+	const probe = await spin(`Probing Ollama at ${host}`, () => probeOllama(host));
+	if (!probe.ok) {
+		captureError({
+			severity: "critical",
+			errorType: "ollama_probe",
+			errorSrc: "wizard:provider",
+			message: `Ollama daemon unreachable: ${probe.error ?? "unknown error"}`,
+			context: { host, probeError: probe.error },
+		});
+		note(renderOllamaSetupHelp("not-running", host), "Ollama not reachable");
+		closePrompt();
+		process.exit(1);
+	}
+
+	const cloudModels = filterCloudModels(probe.models);
+	if (cloudModels.length === 0) {
+		captureError({
+			severity: "critical",
+			errorType: "ollama_no_cloud_models",
+			errorSrc: "wizard:provider",
+			message: "Ollama reachable but no cloud models available",
+			context: { host, totalModels: probe.models.length },
+		});
+		note(renderOllamaSetupHelp("no-cloud-models", host), "No cloud models");
+		closePrompt();
+		process.exit(1);
+	}
+
+	const picked = await choose(
+		`Pick a default model (${cloudModels.length} found)`,
+		cloudModels.map((m) => m.name),
+		0,
+	);
+
+	const modelString = `ollama/${picked}`;
+	state.config.default_model = modelString;
+	state.config.tier_routing = { default: modelString };
+	note(`Model: ${modelString}\nHost: ${host}`, "Ollama configured");
+}
+
+async function setupApiKeyProvider(
+	state: { config: Record<string, unknown> },
+	providerName: string,
+): Promise<void> {
+	const hint = PROVIDER_MODEL_HINTS[providerName] ?? "model-id";
+
+	const apiKey = await ask(`${providerName} API key`, "");
+	if (!apiKey) {
+		note(
+			`No API key provided.\nYou can add it later to ~/.mypensieve/.secrets/${providerName}.json`,
+			"Skipped",
+		);
+		// Still set the provider so config is valid - user adds key later
+		const modelId = await ask(`Model ID (e.g. ${hint})`, hint);
+		const modelString = `${providerName}/${modelId}`;
+		state.config.default_model = modelString;
+		state.config.tier_routing = { default: modelString };
+		return;
+	}
+
+	// Validate the key with a quick probe
+	const valid = await spin(`Validating ${providerName} API key`, async () => {
+		try {
+			const baseUrls: Record<string, string> = {
+				anthropic: "https://api.anthropic.com/v1/models",
+				openrouter: "https://openrouter.ai/api/v1/models",
+				openai: "https://api.openai.com/v1/models",
+			};
+			const url = baseUrls[providerName];
+			if (!url) return true; // Unknown provider - skip validation
+
+			const headers: Record<string, string> =
+				providerName === "anthropic"
+					? { "x-api-key": apiKey, "anthropic-version": "2023-06-01" }
+					: { Authorization: `Bearer ${apiKey}` };
+
+			const res = await fetch(url, {
+				headers,
+				signal: AbortSignal.timeout(5000),
+			});
+			return res.ok || res.status === 401 ? res.ok : true; // Non-401 errors are likely fine
+		} catch {
+			return true; // Network error - don't block wizard, user can fix later
+		}
+	});
+
+	if (!valid) {
+		note(
+			"API key validation failed (401 Unauthorized).\nSaving anyway - you can update it later.",
+			"Warning",
+		);
+	}
+
+	// Save the key
+	try {
+		const result = writeSecret(`${providerName}.json`, { api_key: apiKey });
+		note(`API key saved to ${result.path} (mode 0600)`, "Saved");
+	} catch (err) {
+		const e = err instanceof Error ? err : new Error(String(err));
+		note(`Failed to save key: ${e.message}\nAdd it manually later.`, "Error");
+	}
+
+	const modelId = await ask(`Model ID (e.g. ${hint})`, hint);
+	const modelString = `${providerName}/${modelId}`;
+	state.config.default_model = modelString;
+	state.config.tier_routing = { default: modelString };
+	note(`Provider: ${providerName}\nModel: ${modelString}`, "Provider configured");
+}
+
+function buildConfig(state: { config: Record<string, unknown> }): Config {
+	const wizardPersona = state.config.agent_persona as AgentPersona | undefined;
+	return {
+		version: 1,
+		operator: state.config.operator as Config["operator"],
+		default_model: state.config.default_model as Config["default_model"],
+		agent_models: state.config.agent_models as Config["agent_models"],
+		persona_mode: state.config.persona_mode as Config["persona_mode"],
+		agent_persona: wizardPersona,
+		tier_routing: state.config.tier_routing as Config["tier_routing"],
+		embeddings: (state.config.embeddings as Config["embeddings"]) ?? { enabled: false },
+		daily_log: {
+			enabled: true,
+			cron: "0 20 * * *",
+			channel: "cli",
+			auto_prompt_next_morning_if_missed: true,
+		},
+		backup: {
+			enabled: true,
+			cron: "30 2 * * *",
+			retention_days: 30,
+			destinations: [{ type: "local", path: "/tmp/mypensieve-backups" }],
+			include_secrets: false,
+		},
+		channels: state.config.channels as Config["channels"],
+		extractor: { cron: "0 2 * * *" },
+	};
+}
+
+function scaffoldWithCapture(): { created: string[] } {
+	try {
+		return scaffoldDirectories();
+	} catch (err) {
+		const e = err instanceof Error ? err : new Error(String(err));
+		captureError({
+			severity: "critical",
+			errorType: "directory_scaffold",
+			errorSrc: "wizard:initialize",
+			message: e.message,
+			stack: e.stack,
+		});
+		throw err;
+	}
+}
+
+function installExtensionWithCapture(): ReturnType<typeof installMyPensieveExtension> {
+	try {
+		return installMyPensieveExtension();
+	} catch (err) {
+		const e = err instanceof Error ? err : new Error(String(err));
+		captureError({
+			severity: "critical",
+			errorType: "extension_install",
+			errorSrc: "wizard:initialize",
+			message: e.message,
+			stack: e.stack,
+		});
+		throw err;
+	}
+}
+
+async function setupTelegramChannel(state: { config: Record<string, unknown> }): Promise<void> {
+	note(
+		"1. Open Telegram, start a chat with @BotFather\n" +
+			"2. Send /newbot and follow the prompts\n" +
+			"3. Copy the token (digits:alphanumeric)\n" +
+			"4. Also run: /setjoingroups -> Disable, /setprivacy -> Enable",
+		"Step 1/3: Create bot",
+	);
+
+	const token = await ask("Paste the bot token (or press Enter to skip)", "");
+	if (token) {
+		const tokenOk = /^\d+:[A-Za-z0-9_-]{20,}$/.test(token);
+		if (!tokenOk) {
+			note(`'${token.slice(0, 8)}...' doesn't match expected format.\nSaving anyway.`, "Warning");
+		}
+		try {
+			const result = writeSecret("telegram.json", { bot_token: token });
+			note(`Token saved to ${result.path} (mode 0600)`, "Saved");
+		} catch (err) {
+			const e = err instanceof Error ? err : new Error(String(err));
+			note(`Failed: ${e.message}\nAdd it manually later.`, "Error");
+		}
+	} else {
+		note("No token provided.\nAdd it later to ~/.mypensieve/.secrets/telegram.json", "Skipped");
+	}
+
+	note(
+		"1. Open Telegram, search for @userinfobot\n" +
+			"2. Start a chat and press Start\n" +
+			"3. Copy the numeric ID it replies with",
+		"Step 2/3: Your Telegram user ID",
+	);
+
+	const peerId = await ask("Your Telegram user ID (numeric, or Enter to skip)", "");
+	if (peerId) {
+		if (!/^\d+$/.test(peerId)) {
+			note(`'${peerId}' doesn't look numeric. Saving anyway.`, "Warning");
+		}
+		(state.config.channels as { telegram: { allowed_peers: string[] } }).telegram.allowed_peers = [
+			peerId,
+		];
+	} else {
+		note("No peer added. Bot will reject ALL messages until you add your ID.", "Warning");
+	}
+
+	note(
+		"Bot token saved, allowlist set.\nRun 'mypensieve start' later to connect.",
+		"Step 3/3: Done",
+	);
+}
+
+// --- Wizard steps ---
 
 export function createWizardSteps(): WizardStep[] {
 	return [
@@ -26,15 +260,15 @@ export function createWizardSteps(): WizardStep[] {
 			name: "welcome",
 			description: "Welcome + operator profile",
 			run: async (state) => {
-				console.log("\n  Welcome to MyPensieve!\n");
+				intro("MyPensieve Setup");
+
 				const detectedName = process.env.USER ?? "operator";
 				const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 				const tzValid = typeof detectedTz === "string" && detectedTz.length > 0;
 
-				console.log(`  Detected name:     ${detectedName}`);
-				console.log(
-					`  Detected timezone: ${tzValid ? detectedTz : "(could not detect - will prompt)"}`,
-				);
+				if (tzValid) {
+					note(`Name: ${detectedName}\nTimezone: ${detectedTz}`, "Detected");
+				}
 
 				const useDetected = tzValid ? await confirm("Use these values?", true) : false;
 
@@ -56,59 +290,32 @@ export function createWizardSteps(): WizardStep[] {
 		},
 		{
 			name: "providers",
-			description: "AI Provider + Model setup (Ollama Cloud)",
+			description: "AI Provider + Model setup",
 			run: async (state) => {
-				const host = getOllamaHost();
-				console.log(`\n  Probing local Ollama daemon at ${host}...`);
-
-				const probe = await probeOllama(host);
-				if (!probe.ok) {
-					captureError({
-						severity: "critical",
-						errorType: "ollama_probe",
-						errorSrc: "wizard:provider",
-						message: `Ollama daemon unreachable: ${probe.error ?? "unknown error"}`,
-						context: { host, probeError: probe.error },
-					});
-					console.log(`  Probe failed: ${probe.error ?? "unknown error"}\n`);
-					console.log(renderOllamaSetupHelp("not-running", host));
-					console.log("");
-					closePrompt();
-					process.exit(1);
-				}
-
-				const cloudModels = filterCloudModels(probe.models);
-				if (cloudModels.length === 0) {
-					captureError({
-						severity: "critical",
-						errorType: "ollama_no_cloud_models",
-						errorSrc: "wizard:provider",
-						message: "Ollama reachable but no cloud models available",
-						context: {
-							host,
-							totalModels: probe.models.length,
-							modelNames: probe.models.map((m) => m.name),
-						},
-					});
-					console.log("  Ollama is running but no cloud models are signed in.\n");
-					console.log(renderOllamaSetupHelp("no-cloud-models", host));
-					console.log("");
-					closePrompt();
-					process.exit(1);
-				}
-
-				console.log(`  Found ${cloudModels.length} cloud model(s):\n`);
-				const picked = await choose(
-					"Pick a default model",
-					cloudModels.map((m) => m.name),
+				const provider = await choose(
+					"Choose your AI provider",
+					[
+						"Ollama (local/cloud via daemon)",
+						"Anthropic (Claude API)",
+						"OpenRouter (multi-model gateway)",
+						"OpenAI (GPT/o-series API)",
+					],
 					0,
 				);
 
-				const modelString = `ollama/${picked}`;
-				state.config.default_model = modelString;
-				state.config.tier_routing = { default: modelString };
-				console.log(`\n  Default model: ${modelString}`);
-				console.log(`  Ollama host:   ${host} (set OLLAMA_HOST to override at runtime)`);
+				const providerName = provider.startsWith("Ollama")
+					? "ollama"
+					: provider.startsWith("Anthropic")
+						? "anthropic"
+						: provider.startsWith("OpenRouter")
+							? "openrouter"
+							: "openai";
+
+				if (providerName === "ollama") {
+					await setupOllamaProvider(state);
+				} else {
+					await setupApiKeyProvider(state, providerName);
+				}
 			},
 		},
 		{
@@ -216,7 +423,7 @@ export function createWizardSteps(): WizardStep[] {
 			name: "channels",
 			description: "Channel selection",
 			run: async (state) => {
-				console.log("  CLI channel is always enabled.\n");
+				note("CLI channel is always enabled.", "Channels");
 				const enableTelegram = await confirm("Enable Telegram channel?", false);
 
 				state.config.channels = {
@@ -230,73 +437,7 @@ export function createWizardSteps(): WizardStep[] {
 				};
 
 				if (enableTelegram) {
-					// --- Step A: bot token ---
-					console.log("\n  Step 1/3: Create the bot and get a token");
-					console.log("    1. Open Telegram and start a chat with @BotFather");
-					console.log("    2. Send /newbot and follow the prompts (pick a name + username)");
-					console.log("    3. BotFather replies with a token that looks like:");
-					console.log("         1234567890:ABCdefGhIJKlmNOpqrstUVWXYZ12345678");
-					console.log("       (digits, a colon, then ~35 characters)");
-					console.log("    4. While you're in BotFather also run:");
-					console.log("         /setjoingroups -> Disable   (blocks group joins)");
-					console.log("         /setprivacy    -> Enable    (hides group messages from the bot)");
-					console.log("");
-
-					const token = await ask("Paste the bot token (or press Enter to skip and add later)", "");
-					if (token) {
-						const tokenOk = /^\d+:[A-Za-z0-9_-]{20,}$/.test(token);
-						if (!tokenOk) {
-							console.log(
-								`  Warning: '${token.slice(0, 8)}...' does not match the Telegram token format`,
-							);
-							console.log("  (expected: digits:alphanumeric, 20+ chars after the colon).");
-							console.log("  Saving it anyway - edit later via 'mypensieve config edit'.");
-						}
-						try {
-							const result = writeSecret("telegram.json", { bot_token: token });
-							console.log(`  Token saved to ${result.path} (mode 0600)`);
-						} catch (err) {
-							const e = err instanceof Error ? err : new Error(String(err));
-							console.log(`  Failed to save token: ${e.message}`);
-							console.log(
-								"  You can add it later by editing ~/.mypensieve/.secrets/telegram.json manually.",
-							);
-						}
-					} else {
-						console.log("  No token provided. Telegram channel is enabled in config but won't");
-						console.log(
-							"  actually connect until you add the token to ~/.mypensieve/.secrets/telegram.json",
-						);
-					}
-
-					// --- Step B: your Telegram user ID (allowlist) ---
-					console.log("\n  Step 2/3: Find your Telegram user ID for the allowlist");
-					console.log("    1. Open Telegram and search for @userinfobot");
-					console.log("    2. Start a chat and press Start");
-					console.log("    3. It replies with 'Id: 123456789' - that number is your user ID");
-					console.log("       (typically 8-10 digits, always numeric)");
-					console.log("    4. Anyone not in this allowlist will be rejected by the bot");
-					console.log("");
-
-					const peerId = await ask("Your Telegram user ID (numeric, or press Enter to skip)", "");
-					if (peerId) {
-						if (!/^\d+$/.test(peerId)) {
-							console.log(`  Warning: '${peerId}' doesn't look like a numeric Telegram ID.`);
-							console.log("  Saving it anyway - you can edit later via 'mypensieve config edit'.");
-						}
-						(
-							state.config.channels as { telegram: { allowed_peers: string[] } }
-						).telegram.allowed_peers = [peerId];
-						console.log(`  Peer ${peerId} added to allowed list`);
-					} else {
-						console.log("  No peer added. Bot will reject ALL messages until you add your ID.");
-					}
-
-					// --- Step C: reminder summary ---
-					console.log("\n  Step 3/3: You're done with Telegram setup.");
-					console.log("    - Bot token:   saved to .secrets/telegram.json");
-					console.log("    - Allowlist:   your user ID only");
-					console.log("    - Run 'mypensieve start' later to connect the bot.");
+					await setupTelegramChannel(state);
 				}
 			},
 		},
@@ -389,15 +530,16 @@ export function createWizardSteps(): WizardStep[] {
 
 				const agentPersona = state.config.agent_persona as AgentPersona | undefined;
 
-				console.log("\n  ---- Configuration Summary ----");
-				console.log(`  Operator:    ${op.name}`);
-				console.log(`  Timezone:    ${op.timezone}`);
-				console.log(`  Model:       ${state.config.default_model ?? "not-configured"}`);
-				console.log(`  Channels:    CLI${channels.telegram?.enabled ? " + Telegram" : ""}`);
-				console.log(`  Embeddings:  ${embeddings.enabled ? "enabled" : "disabled"}`);
-				console.log(`  Persona:     ${state.config.persona_mode}`);
-				console.log(`  Agent:       ${agentPersona?.name ?? "(will ask on first run)"}`);
-				console.log("  -------------------------------\n");
+				note(
+					`Operator:    ${op.name}\n` +
+						`Timezone:    ${op.timezone}\n` +
+						`Model:       ${state.config.default_model ?? "not-configured"}\n` +
+						`Channels:    CLI${channels.telegram?.enabled ? " + Telegram" : ""}\n` +
+						`Embeddings:  ${embeddings.enabled ? "enabled" : "disabled"}\n` +
+						`Persona:     ${state.config.persona_mode}\n` +
+						`Agent:       ${agentPersona?.name ?? "(will ask on first run)"}`,
+					"Configuration Summary",
+				);
 
 				const ok = await confirm("Look good? Proceed with setup?", true);
 				if (!ok) {
@@ -411,36 +553,10 @@ export function createWizardSteps(): WizardStep[] {
 			name: "initialize",
 			description: "Initialize directories + write config",
 			run: async (state) => {
-				let created: string[];
-				try {
-					({ created } = scaffoldDirectories());
-				} catch (err) {
-					const e = err instanceof Error ? err : new Error(String(err));
-					captureError({
-						severity: "critical",
-						errorType: "directory_scaffold",
-						errorSrc: "wizard:initialize",
-						message: e.message,
-						stack: e.stack,
-					});
-					throw err;
-				}
+				const { created } = scaffoldWithCapture();
 				console.log(`  Created ${created.length} directories`);
 
-				let extInstall: ReturnType<typeof installMyPensieveExtension>;
-				try {
-					extInstall = installMyPensieveExtension();
-				} catch (err) {
-					const e = err instanceof Error ? err : new Error(String(err));
-					captureError({
-						severity: "critical",
-						errorType: "extension_install",
-						errorSrc: "wizard:initialize",
-						message: e.message,
-						stack: e.stack,
-					});
-					throw err;
-				}
+				const extInstall = installExtensionWithCapture();
 				console.log(`  Pi extension bridge ${extInstall.action} at ${extInstall.bridgePath}`);
 
 				// Write persona templates (or real persona if defined in wizard)
@@ -462,32 +578,7 @@ export function createWizardSteps(): WizardStep[] {
 					console.log(`  Operator persona template written to ${opTpl.path}`);
 				}
 
-				const config: Config = {
-					version: 1,
-					operator: state.config.operator as Config["operator"],
-					default_model: state.config.default_model as Config["default_model"],
-					agent_models: state.config.agent_models as Config["agent_models"],
-					persona_mode: state.config.persona_mode as Config["persona_mode"],
-					agent_persona: wizardPersona,
-					tier_routing: state.config.tier_routing as Config["tier_routing"],
-					embeddings: (state.config.embeddings as Config["embeddings"]) ?? { enabled: false },
-					daily_log: {
-						enabled: true,
-						cron: "0 20 * * *",
-						channel: "cli",
-						auto_prompt_next_morning_if_missed: true,
-					},
-					backup: {
-						enabled: true,
-						cron: "30 2 * * *",
-						retention_days: 30,
-						destinations: [{ type: "local", path: "/tmp/mypensieve-backups" }],
-						include_secrets: false,
-					},
-					channels: state.config.channels as Config["channels"],
-					extractor: { cron: "0 2 * * *" },
-				};
-
+				const config = buildConfig(state);
 				try {
 					writeConfig(config);
 				} catch (err) {
@@ -513,11 +604,14 @@ export function createWizardSteps(): WizardStep[] {
 					console.log(`  Git: ${git.error}`);
 				}
 
-				console.log("\n  MyPensieve initialized!\n");
-				console.log("  Next steps:");
-				console.log("    mypensieve start           Start the Telegram bot (always-on)");
-				console.log("    mypensieve cli             Open an interactive CLI session");
-				console.log("    mypensieve daemon install   Auto-start on boot (coming soon)\n");
+				outro("MyPensieve initialized!");
+				note(
+					"mypensieve start           Start the Telegram bot (always-on)\n" +
+						"mypensieve cli             Open an interactive CLI session\n" +
+						"mypensieve daemon install   Auto-start on boot\n" +
+						"mypensieve doctor install   Auto-healthcheck every 3 days",
+					"Next steps",
+				);
 				closePrompt();
 			},
 		},

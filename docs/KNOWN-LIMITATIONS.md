@@ -1,5 +1,5 @@
 # MyPensieve - Known Limitations
-> Last updated: 2026-04-16 (v0.1.18)
+> Last updated: 2026-04-16 (v0.2.0-alpha.1)
 
 These are honest disclaimers about what works, what doesn't, and what to expect.
 
@@ -20,7 +20,7 @@ These are honest disclaimers about what works, what doesn't, and what to expect.
 - Ollama cloud models require `ollama signin` with an NVIDIA account
 - Ollama local models require sufficient VRAM (7B = ~4GB, 13B = ~8GB, 70B = ~40GB)
 - Non-Ollama providers require API keys in `~/.mypensieve/.secrets/{provider}.json`
-- Wizard multi-provider menu not yet implemented - manual config edit required for non-Ollama providers
+- Wizard supports multi-provider selection (v0.2.0-alpha.1+) with API key validation
 - Model quality varies - smaller models may not follow the persona prompt or security rules well
 
 ## Platform Support
@@ -78,4 +78,4 @@ These are warnings, not errors. They don't affect functionality or security.
 - Agent may occasionally show raw tool output instead of a natural response (fallback when model skips text commentary)
 - The `save_persona` tool may not fire correctly if the model doesn't follow tool-use patterns
 - System prompt security rules depend on model quality - smaller models may not follow them consistently
-- Wizard TUI is basic readline (no arrow-key navigation) - upgrade planned for v0.4.0
+- Wizard TUI uses @clack/prompts (v0.2.0-alpha.1+) with select, confirm, spinner, and text prompts
