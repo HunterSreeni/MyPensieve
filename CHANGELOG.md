@@ -6,6 +6,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.17] - 2026-04-16
+
+Ops automation - version update checks and auto-doctor timer.
+
+### Added
+- **Version update check** on CLI startup: non-blocking npm registry query with 3s timeout and 24h cache. Prints update notice to stderr when a newer version is available, and nudges `mypensieve doctor` after upgrade.
+- **Doctor timer** (`mypensieve doctor install|uninstall|status`): systemd timer that runs `mypensieve doctor` every 3 days at noon. `Persistent=true` catches up after laptop was off.
+- **Doctor check: Version** - queries npm registry during healthcheck, warns if behind.
+- **Doctor check: Extractor Timer** - warns if the extractor timer is not installed.
+
+### Tests
+- 4 new tests for update-check (cache, newer/same/older version, offline). Total suite: 498 tests (was 494).
+
+---
+
 ## [0.1.16] - 2026-04-16
 
 Pi SDK upgrade + multi-provider infrastructure (v0.2.0 groundwork).

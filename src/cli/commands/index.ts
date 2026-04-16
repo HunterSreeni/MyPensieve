@@ -57,9 +57,27 @@ registerCommand({
 
 registerCommand({
 	name: "doctor",
-	description: "Run a healthcheck on all components",
-	usage: "mypensieve doctor",
-	run: async (_args) => {
+	description: "Run a healthcheck on all components, or manage the auto-doctor timer",
+	usage: "mypensieve doctor [install|uninstall|status]",
+	run: async (args) => {
+		const subcommand = args[0];
+		if (subcommand && ["install", "uninstall", "status"].includes(subcommand)) {
+			const { installDoctorTimer, uninstallDoctorTimer, doctorTimerStatus } = await import(
+				"./doctor-timer.js"
+			);
+			switch (subcommand) {
+				case "install":
+					await installDoctorTimer();
+					break;
+				case "uninstall":
+					await uninstallDoctorTimer();
+					break;
+				case "status":
+					await doctorTimerStatus();
+					break;
+			}
+			return;
+		}
 		await runDoctor();
 	},
 });

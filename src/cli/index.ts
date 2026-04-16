@@ -3,9 +3,14 @@
 import "./commands/index.js";
 import { captureError, installProcessErrorHandlers } from "../ops/index.js";
 import { dispatch } from "./router.js";
+import { checkForUpdates } from "./update-check.js";
 
 async function main(): Promise<void> {
 	installProcessErrorHandlers();
+
+	// Fire-and-forget update check (non-blocking, 3s timeout, 24h cache)
+	checkForUpdates().catch(() => {});
+
 	try {
 		await dispatch(process.argv.slice(2));
 	} catch (err) {
