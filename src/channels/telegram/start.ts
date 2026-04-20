@@ -23,14 +23,25 @@ import { ConfigReadError, readConfig } from "../../config/index.js";
 import { PI_DIRS, SECRETS_DIR } from "../../config/paths.js";
 import { parseModelString, resolveDefaultModel } from "../../config/schema.js";
 import { createToolGuard } from "../../core/security/tool-guard.js";
+import { writeSessionMeta } from "../../core/session-meta.js";
+import { getProjectBinding } from "../../core/session.js";
 import { savePersonaTool } from "../../core/tools/persona-tool.js";
 import { validateChannelBinding } from "../../gateway/binding-validator.js";
+import { createGatewayExtension } from "../../gateway/extension.js";
 import { isPersonaTemplate } from "../../init/persona-templates.js";
 import { captureError, withCapture } from "../../ops/index.js";
+import { loadProject } from "../../projects/loader.js";
 import { isProviderSupported } from "../../providers/factory.js";
 import { buildRegistrationPlan, executeRegistrationPlan } from "../../providers/multi-register.js";
 import { getOllamaHost } from "../../providers/ollama.js";
+import { type SkillContext, createUnifiedExecutor } from "../../skills/executor.js";
+import { createDefaultRegistry } from "../../skills/registry.js";
 import { VERSION } from "../../version.js";
+import {
+	type TelegramConfirmRegistry,
+	attachConfirmCallbackHandler,
+	createTelegramConfirmProvider,
+} from "./confirm-provider.js";
 import { chunkMessage, sanitizeOutput, toTelegramMarkdown } from "./formatter.js";
 import { PeerRateLimiter } from "./rate-limiter.js";
 
@@ -242,6 +253,9 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 
 	// Track active agent sessions per peer
 	const peerAgents = new Map<string, PeerAgent>();
+	// Per-peer confirm registry so inline-button callbacks can resolve the
+	// dispatcher's pending confirmation promise.
+	const peerConfirmRegistries = new Map<string, TelegramConfirmRegistry>();
 	const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 min inactivity
 	const rateLimiter = new PeerRateLimiter();
 	const startedAt = Date.now();
@@ -264,10 +278,36 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 			sessionManager: runtimeSessionManager,
 			sessionStartEvent,
 		}) => {
+			// Build the 8-verb gateway executor for this peer. The dispatcher
+			// uses an inline-button confirm provider so the operator must tap
+			// Approve before any destructive `dispatch` runs.
+			const binding = getProjectBinding("telegram", peerId);
+			const project = loadProject(binding);
+			const skillCtx: SkillContext = {
+				project,
+				config,
+				channelType: "telegram",
+				sessionId: `telegram-${peerId}-${Date.now()}`,
+			};
+			const skillExecutor = createUnifiedExecutor(createDefaultRegistry(), skillCtx);
+			const { provider: confirmProvider, registry: confirmRegistry } =
+				createTelegramConfirmProvider({
+					bot: { sendMessage: bot.api.sendMessage.bind(bot.api) },
+					peerId,
+				});
+			peerConfirmRegistries.set(peerId, confirmRegistry);
+			const gatewayFactory = createGatewayExtension({
+				channelType: "telegram",
+				project: binding,
+				executor: skillExecutor,
+				confirmProvider,
+			});
+
 			const services = await createAgentSessionServices({
 				cwd: runtimeCwd,
 				agentDir: runtimeAgentDir,
 				authStorage,
+				resourceLoaderOptions: { extensionFactories: [gatewayFactory] },
 			});
 
 			await withCapture(
@@ -320,6 +360,23 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 
 		// Install filesystem security guardrails (critical for unattended Telegram channel)
 		session.agent.beforeToolCall = createToolGuard(cwd);
+
+		// Overwrite the session-meta marker with peer_id attribution. The shared
+		// MyPensieve extension already wrote a basic marker at session_start;
+		// we rewrite it now that we have peerId in scope.
+		try {
+			const sid = sessionManager.getSessionId();
+			if (sid) {
+				writeSessionMeta({
+					session_id: sid,
+					channel_type: "telegram",
+					peer_id: peerId,
+					timestamp: new Date().toISOString(),
+				});
+			}
+		} catch {
+			// Non-critical - extractor still works with channel-only attribution.
+		}
 
 		peerAgents.set(peerId, {
 			session,
@@ -397,6 +454,10 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 	// Step 7: Create grammy bot
 	const bot = new Bot(secrets.bot_token);
 
+	// Inline-button confirm callback: routes Approve/Deny taps back to the
+	// dispatcher's pending confirmation promise for the matching peer.
+	attachConfirmCallbackHandler(bot, (peerId) => peerConfirmRegistries.get(peerId));
+
 	// --- Command handlers (must be registered BEFORE bot.on("message:text")) ---
 
 	// Handle /start command
@@ -420,6 +481,7 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 		if (existing) {
 			existing.session.agent.reset();
 			peerAgents.delete(peerId);
+			peerConfirmRegistries.delete(peerId);
 			await ctx.reply("Session reset. Next message starts a fresh conversation.");
 		} else {
 			await ctx.reply("No active session to reset.");
@@ -575,6 +637,7 @@ export async function startTelegramListener(opts?: { configPath?: string }): Pro
 				if (now - peer.lastActivity > SESSION_TIMEOUT_MS) {
 					peer.session.agent.reset();
 					peerAgents.delete(peerId);
+					peerConfirmRegistries.delete(peerId);
 					console.log(`[telegram] Reaped inactive session for peer ${peerId}`);
 				}
 			}

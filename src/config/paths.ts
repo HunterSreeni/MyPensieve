@@ -23,6 +23,7 @@ export const DIRS = {
 	logsCron: path.join(MYPENSIEVE_DIR, "logs", "cron"),
 	state: path.join(MYPENSIEVE_DIR, "state"),
 	stateReminders: path.join(MYPENSIEVE_DIR, "state", "reminders"),
+	sessionMeta: path.join(MYPENSIEVE_DIR, "state", "session-meta"),
 	secrets: SECRETS_DIR,
 	metaSkills: path.join(MYPENSIEVE_DIR, "meta-skills"),
 } as const;

@@ -113,7 +113,27 @@ export const ChannelsSchema = z.object({
 
 export const ExtractorSchema = z.object({
 	cron: z.string().default("0 2 * * *"),
+	/**
+	 * Run the synthesizer (de-dup decisions, aggregate persona deltas) in
+	 * report-only mode after the nightly extraction. Set to false to skip.
+	 */
+	synthesize_after: z.boolean().default(true),
 });
+
+// --- Security policy ---
+
+export const SecuritySchema = z.object({
+	/**
+	 * Policy for the `dispatch` verb when an agent runs in a daemon/unattended
+	 * context (no human-driven confirm provider available). "deny" blocks all
+	 * destructive dispatches (safest). "allow" approves automatically (only
+	 * for trusted automation pipelines). "require_provider" throws if a
+	 * confirm provider is missing.
+	 */
+	daemon_confirm_policy: z.enum(["deny", "allow", "require_provider"]).default("deny"),
+});
+
+export type SecurityConfig = z.infer<typeof SecuritySchema>;
 
 // --- Top-level config ---
 
@@ -144,7 +164,8 @@ export const ConfigSchema = z.object({
 	}),
 	backup: BackupSchema,
 	channels: ChannelsSchema.default({}),
-	extractor: ExtractorSchema.default({ cron: "0 2 * * *" }),
+	extractor: ExtractorSchema.default({ cron: "0 2 * * *", synthesize_after: true }),
+	security: SecuritySchema.default({ daemon_confirm_policy: "deny" }),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

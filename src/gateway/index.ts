@@ -33,7 +33,15 @@ export {
 	type SkillExecutor,
 	type DispatchContext,
 	type DispatchResult,
+	type ConfirmProvider,
+	type ConfirmRequest,
+	type ConfirmResponse,
+	CONFIRM_REQUIRED_VERBS,
 } from "./dispatcher.js";
+export {
+	createAutoPolicyConfirmProvider,
+	createCliConfirmProvider,
+} from "./confirm-providers.js";
 export { createGatewayExtension } from "./extension.js";
 export {
 	scanSkillsForRegistration,

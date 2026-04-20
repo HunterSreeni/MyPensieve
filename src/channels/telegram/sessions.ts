@@ -1,6 +1,6 @@
 import type { Config } from "../../config/schema.js";
 import { getProjectBinding } from "../../core/session.js";
-import { GatewayDispatcher } from "../../gateway/dispatcher.js";
+import { type ConfirmProvider, GatewayDispatcher } from "../../gateway/dispatcher.js";
 import { loadAllRoutingTables } from "../../gateway/routing-loader.js";
 import { type ProjectState, closeProject, loadProject } from "../../projects/loader.js";
 import { type SkillContext, createUnifiedExecutor } from "../../skills/executor.js";
@@ -26,11 +26,20 @@ export class PeerSessionManager {
 	private timeoutMs: number;
 	private config: Config;
 	private projectsDir?: string;
+	private confirmProvider?: ConfirmProvider;
 
-	constructor(config: Config, opts?: { timeoutMs?: number; projectsDir?: string }) {
+	constructor(
+		config: Config,
+		opts?: {
+			timeoutMs?: number;
+			projectsDir?: string;
+			confirmProvider?: ConfirmProvider;
+		},
+	) {
 		this.timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 		this.config = config;
 		this.projectsDir = opts?.projectsDir;
+		this.confirmProvider = opts?.confirmProvider;
 	}
 
 	/**
@@ -82,7 +91,7 @@ export class PeerSessionManager {
 
 		const executor = createUnifiedExecutor(registry, ctx);
 		const tables = loadAllRoutingTables();
-		const dispatcher = new GatewayDispatcher(tables, executor);
+		const dispatcher = new GatewayDispatcher(tables, executor, this.confirmProvider);
 
 		const session: PeerSession = {
 			peerId,

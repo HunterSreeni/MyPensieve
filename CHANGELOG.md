@@ -6,6 +6,42 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.0] - 2026-04-20
+
+v0.3.0 - autonomous operations, operator-in-the-loop safety, persona loadouts, multi-provider memory pipeline, full gateway wiring in Telegram.
+
+### Highlights
+- **Echoes wired**: daily-log reminders, nightly memory extraction, and automated backups now fire on their configured crons via an in-process scheduler. No system cron required.
+- **Dispatch confirm enforcement**: destructive `dispatch` verb is gated by an operator confirmation prompt. CLI uses interactive `@clack/prompts`, Telegram uses inline Approve/Deny buttons (60s auto-deny timeout).
+- **Persona loadouts**: maintain multiple switchable agent identities under `~/.mypensieve/loadouts/<name>/`. New CLI: `mypensieve persona list | switch | create | show | delete`. Auto-migrates existing single-persona installs into a `default` loadout.
+- **Multi-provider extractor**: all 4 providers (Ollama, Anthropic, OpenAI, OpenRouter) wired as memory-extractor backends. API key resolved once per run (fails fast if missing).
+- **Synthesizer**: decision de-duplication + persona-delta aggregation. `mypensieve synthesize [--apply]` CLI (report-only default) + post-extract synth in nightly echo.
+- **Per-channel extractor checkpoints**: CLI and Telegram sessions advance independently via `.extractor-anchors.json`. Channel attribution via session-meta markers written by each channel.
+- **Telegram gateway wiring**: the 8-verb gateway now loads as a session-scoped extension in every Telegram peer session, with per-peer ConfirmProvider + registry.
+- **Verb-level write-path guardrail**: `produce.output_path` validated against the filesystem allow-list before skill execution.
+
+### Security
+- `confirm:false` cannot be set by the LLM to bypass the confirm provider; the dispatcher always calls the provider for destructive verbs.
+- Telegram inline-button callbacks are bound to the requesting peer; other allowed peers (e.g. in a group) cannot tap through another peer's confirmation.
+- Operator-denied verb calls logged as `audit.fail` with `operator_denied` reason so audit readers can tell "executed successfully" from "operator refused to approve".
+- Session-meta filenames include a sha256 suffix to avoid sanitization collisions.
+- Provider-complete shims never include API keys or request bodies in captured errors.
+
+### Config additions
+- `extractor.synthesize_after: boolean` (default `true`) - run the synthesizer in report-only mode after each nightly extraction.
+- `security.daemon_confirm_policy: "deny" | "allow" | "require_provider"` (default `deny`) - policy for destructive verb calls in unattended/daemon contexts.
+
+### New CLI commands
+- `mypensieve persona <subcommand>` - manage persona loadouts
+- `mypensieve synthesize [--apply] [--project <binding>]` - run the memory synthesizer
+
+### Stats
+- 579 tests across 51 test files (was 525 at v0.2.0)
+- 54 new tests added during v0.3.0 development
+- 3-agent code review pass + focused fix-review pass: 17 distinct issues found and fixed before release
+
+---
+
 ## [0.2.0] - 2026-04-16
 
 v0.2.0 stable release - multi-provider, multi-model council, persona split, personality-driven greetings.

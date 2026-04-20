@@ -18,20 +18,26 @@ Built on top of [Pi](https://github.com/badlogic/pi-mono) (`@mariozechner/pi-cod
 
 - **Persistent memory** - decisions, threads, and persona insights survive across sessions. Ask "what did we decide about X last week?" and get an answer.
 - **8-verb gateway** - the agent sees 8 typed verbs (`recall`, `research`, `ingest`, `monitor`, `journal`, `produce`, `dispatch`, `notify`), never raw tools. Security by architecture.
-- **Multi-channel** - CLI and Telegram in MVP. Same memory, different interfaces.
+- **Operator-in-the-loop confirms** - destructive `dispatch` actions (git, PRs, deploys) are gated by inline Approve/Deny prompts on both CLI and Telegram. Agent-controlled bypass is not possible.
+- **Multi-channel** - CLI and Telegram with the full 8-verb gateway wired on both. Same memory, different interfaces.
 - **Council mode** - convene multiple AI agents with different models to debate a decision. Researcher gathers facts, Critic challenges assumptions, Devil's Advocate argues the opposite.
-- **Per-agent model assignment** - assign any LLM from any provider to any agent. Mix Ollama, OpenRouter, Anthropic, or anything else freely.
+- **Per-agent model assignment** - assign any LLM from any provider to any agent. Mix Ollama, Anthropic, OpenAI, or OpenRouter freely.
+- **Persona loadouts** - maintain multiple switchable agent personas (`work`, `creative`, `default`) and flip between them with `mypensieve persona switch <name>`.
+- **Nightly memory pipeline** - sessions → extractor (any of 4 providers) → decisions/threads/persona-deltas → synthesizer dedup/aggregation. All automatic via in-process echoes.
 - **Daily journal** - structured EOD ritual that captures wins, blockers, mood, energy. Queryable trends over time.
-- **9 skills + 6 MCPs** - blog-seo, CVE monitoring, image/video/audio editing, web research, browser automation, and more.
-- **Zero OAuth in MVP** - all bundled MCPs are free and keyless. No API keys needed to get started.
+- **Hybrid security guardrails** - read deny-list + write allow-list enforced via Pi's `beforeToolCall` hook and verb-level path validation.
 
 ---
 
-## Status: Pre-release (v0.1.x)
+## Status: v0.3.0
 
-**MyPensieve is in active development.** The core framework (memory, gateway, skills, tests) is complete, but the interactive experience is not ready yet. Provider integration and the install wizard require the [Pi re-audit](docs/architecture/PI-REAUDIT-CHECKLIST.md) (scheduled April 13, 2026) before they can be wired up.
+**MyPensieve is in active development.** v0.3.0 ships the autonomous operations layer - scheduled echoes, operator-in-the-loop confirmations, persona loadouts, multi-provider memory extraction, and full gateway integration into the Telegram channel.
 
-**Do not install for production use.** Current npm versions are deprecated. Wait for v0.2.0.
+```bash
+npm install -g mypensieve
+mypensieve init
+mypensieve start
+```
 
 ### For developers / contributors
 
@@ -39,10 +45,46 @@ Built on top of [Pi](https://github.com/badlogic/pi-mono) (`@mariozechner/pi-cod
 git clone https://github.com/HunterSreeni/MyPensieve.git
 cd MyPensieve
 npm install
-npm test          # 304 tests
+npm test          # 579 tests
 npm run build     # compile TypeScript
 node dist/cli/index.js --help
 ```
+
+---
+
+## What's new in v0.3.0
+
+### Autonomous operations
+- **Echoes wired** - daily-log reminders, nightly memory extraction, automated backups all fire on their configured crons via an in-process scheduler. No system cron needed.
+- **Synthesizer** - after each nightly extraction, the synthesizer de-duplicates decisions and aggregates persona deltas. Report-only by default; `mypensieve synthesize --apply` commits the canonicalization.
+
+### Operator-in-the-loop safety
+- **Dispatch confirm enforcement** - destructive verbs (currently `dispatch`) must be approved by the operator before execution. CLI prompts interactively via `@clack/prompts`; Telegram sends inline Approve/Deny buttons with a 60s auto-deny timeout.
+- **LLM self-bypass prevented** - the `confirm:false` argument an agent might set is ignored by the dispatcher. The provider decides, not the LLM.
+- **Group-chat hijack defense** - Telegram confirmation tabs are bound to the requesting peer; other allowed peers in a group cannot tap through another peer's prompt.
+- **Verb-level write-path validation** - `produce.output_path` is checked against the filesystem allow-list before the skill runs, complementing Pi's `beforeToolCall` hook.
+
+### Persona loadouts
+- **Multi-persona support** - store unlimited agent identities under `~/.mypensieve/loadouts/<name>/` and switch between them at will.
+- **CLI** - `mypensieve persona list | switch <name> | create <name> | show [<name>] | delete <name>`.
+- **Migration** - existing single-persona installs seed a `default` loadout automatically.
+
+### Memory extraction, multi-provider
+- **Four providers wired** - Ollama, Anthropic, OpenAI, OpenRouter all work as extractor backends. The factory resolves the API key once per run (fails fast on missing key).
+- **Channel-aware attribution** - each session's channel is tagged via `~/.mypensieve/state/session-meta/<sessionId>.<hash>.json` and surfaced in the per-channel binding.
+- **Per-channel checkpoints** - CLI and Telegram extraction advance independently via `.extractor-anchors.json`. Legacy single-anchor path kept for back-compat.
+
+### Gateway in Telegram
+- The 8-verb gateway now loads as a session-scoped extension inside every Telegram peer session.
+- Each peer gets its own `ConfirmProvider` + `TelegramConfirmRegistry` - scoped, isolated, torn down on `/reset` and inactivity reap.
+
+### Audit & observability
+- Operator-denied verb calls are logged as `audit.fail` with `operator_denied: <reason>` so audit log readers can tell "executed successfully" from "operator refused".
+
+### Stats
+- **579 tests** across 51 test files (was 525 at v0.2.0)
+- 54 new tests added during v0.3.0 development
+- 3-agent code review pass + focused fix-review pass; 17 distinct issues found and fixed before release
 
 ---
 
@@ -51,66 +93,58 @@ node dist/cli/index.js --help
 ```
 Operator
   |
-  +--- CLI channel ----+
-  |                     |
-  +--- Telegram --------+---> Gateway (8 verbs)
-                        |         |
-                        |    +----+----+----+----+----+----+----+----+
-                        |    |recall|research|ingest|monitor|journal|produce|dispatch|notify|
-                        |    +----+----+----+----+----+----+----+----+
-                        |         |
-                        |    Skills (9) + MCPs (6)
-                        |         |
-                        v         v
-                    Memory (5 layers)
+  +--- CLI channel --------+
+  |                         |
+  +--- Telegram channel ----+---> 8-verb Gateway (+ ConfirmProvider)
+                            |            |
+                            |    +-------+--------+-------+-------+-------+-------+--------+-------+
+                            |    |recall |research|ingest |monitor|journal|produce|dispatch|notify |
+                            |    +-------+--------+-------+-------+-------+-------+--------+-------+
+                            |            |
+                            |    Skills + MCPs + verb-level guardrails
+                            |            |
+                            |    Filesystem tool-guard (beforeToolCall)
+                            |            |
+                            v            v
+                    Memory Layers
                     L1: Decisions (JSONL + SQLite)
-                    L2: Threads (JSONL + SQLite)
-                    L3: Persona deltas
-                    L4: Semantic search (optional, embedding-based)
-                    L5: Raw sessions (Pi's JSONL)
+                    L2: Threads   (JSONL + SQLite)
+                    L3: Persona deltas + loadouts
+                    L4: Semantic  (optional, embeddings)
+                    L5: Raw Pi sessions (JSONL)
+                            |
+                    Scheduled Echoes (in-process cron)
+                    - daily-log reminder
+                    - extractor (multi-provider) + synthesizer
+                    - backup / verify / prune
 ```
 
 ### The 8 verbs
 
 The agent never sees raw skill or MCP names. It interacts through 8 typed verbs:
 
-| Verb | Purpose | Routes to |
-|------|---------|-----------|
-| `recall` | Query persistent memory | memory-recall skill |
-| `research` | Web search + synthesize with citations | researcher skill + DuckDuckGo MCP |
-| `ingest` | Convert files/URLs to structured text | PDF, audio, video, image skills |
-| `monitor` | Check for changes (CVEs, packages, GitHub) | cve-monitor skill + gh-cli MCP |
-| `journal` | Daily log - write, read, trends, review | daily-log skill |
-| `produce` | Create content (blog posts, images, video) | blog-seo, image/video/audio skills |
-| `dispatch` | External actions (git, GitHub PRs) | gh-cli MCP |
-| `notify` | Send messages to operator | notification extension |
+| Verb | Purpose | Destructive? |
+|------|---------|-------------|
+| `recall` | Query persistent memory | no |
+| `research` | Web search + synthesize with citations | no |
+| `ingest` | Convert files/URLs to structured text | no |
+| `monitor` | Check for changes (CVEs, packages, GitHub) | no |
+| `journal` | Daily log - write, read, trends, review | local write |
+| `produce` | Create content (blog, image, video, audio) | local write + guardrail-checked |
+| `dispatch` | External state changes (git, PRs, deploys) | **YES - requires operator confirm** |
+| `notify` | Send messages to operator | no |
 
-### Skills (9 custom)
+### Scheduled echoes
 
-| Skill | What it does |
-|-------|-------------|
-| `daily-log` | Structured EOD journal with mood/energy tracking |
-| `memory-recall` | Query decisions, threads, persona across sessions |
-| `researcher` | Plan-search-synthesize with citations |
-| `cve-monitor` | CVE/package vulnerability tracking with diff-only alerts |
-| `blog-seo` | SEO-aware blog drafting with Yoast-style scoring |
-| `playwright-cli` | Browser automation (CLI only, blocked on Telegram) |
-| `image-edit` | Resize, crop, convert, EXIF strip via sharp |
-| `video-edit` | Convert, trim, extract frames via ffmpeg |
-| `audio-edit` | Convert, trim, normalize via ffmpeg + whisper transcription |
+Echoes are in-process scheduled tasks - no system cron required. They run inside the always-on `mypensieve start` daemon.
 
-### MCPs (6 bundled)
+| Echo | Default cron | What it does |
+|------|-------------|--------------|
+| `daily-log` | `0 20 * * *` | Queue an end-of-day journal reminder for the operator |
+| `extractor` | `0 2 * * *` | Nightly memory extraction across all Pi sessions |
+| `backup` | `30 2 * * *` | Tarball `~/.mypensieve/` and `~/.pi/agent/sessions/` |
 
-| MCP | Source | Auth |
-|-----|--------|------|
-| `datetime` | Built-in | None |
-| `playwright` | Standard Playwright MCP | None |
-| `duckduckgo-search` | [nickclyde/duckduckgo-mcp-server](https://github.com/nickclyde/duckduckgo-mcp-server) | None |
-| `whisper-local` | [jwulff/whisper-mcp](https://github.com/jwulff/whisper-mcp) | None |
-| `gh-cli` | [kousen/gh_mcp_server](https://github.com/kousen/gh_mcp_server) | None (uses `gh auth`) |
-| `cve-intel` | Custom (~300 LOC) | None (OSV.dev + NVD + EPSS + CISA KEV) |
-
-Zero OAuth flows in MVP. All APIs are free and keyless.
+The extractor echo also runs the synthesizer in report-only mode (gated by `extractor.synthesize_after`, default `true`).
 
 ---
 
@@ -132,13 +166,27 @@ Each agent gets its own model - any provider, any model. No tiers, no restrictio
 ```json
 {
   "orchestrator": { "model": "ollama-cloud/nemotron-3-super" },
-  "researcher": { "model": "openrouter/minimax-m2.7" },
-  "critic": { "model": "openrouter/kimi-k2" },
+  "researcher":   { "model": "openrouter/minimax-m2.7" },
+  "critic":       { "model": "openrouter/kimi-k2" },
   "devil-advocate": { "model": "anthropic/claude-sonnet-4-6" }
 }
 ```
 
 Or use a single model for everything - the install wizard handles both flows.
+
+### Persona loadouts (v0.3.0+)
+
+Maintain multiple switchable agent identities:
+
+```bash
+mypensieve persona list                  # show all loadouts, active starred
+mypensieve persona create focus          # interactive wizard to define a new identity
+mypensieve persona switch focus          # activate 'focus' for the next session
+mypensieve persona show focus            # print the loadout's identity prompt
+mypensieve persona delete focus          # delete (refuses to delete the active one)
+```
+
+Loadouts live at `~/.mypensieve/loadouts/<name>/` and are isolated from council personalities (which stay in `~/.mypensieve/persona/<council-agent>.md`).
 
 ---
 
@@ -220,8 +268,12 @@ rules:
 | Command | Description |
 |---------|-------------|
 | `mypensieve init` | Run the install wizard |
-| `mypensieve start` | Start an interactive CLI session |
+| `mypensieve start` | Start the daemon (echoes + Telegram if enabled) |
+| `mypensieve cli` | Open an interactive CLI session |
 | `mypensieve log` | Trigger the daily journal |
+| `mypensieve extract` | Manually run memory extractor |
+| `mypensieve synthesize [--apply] [--project <binding>]` | Run synthesizer (report-only by default) |
+| `mypensieve persona list \| switch \| create \| show \| delete` | Manage persona loadouts |
 | `mypensieve config edit` | Edit configuration |
 | `mypensieve errors` | View error log |
 | `mypensieve recover` | Run recovery actions |
@@ -232,7 +284,6 @@ rules:
 | `mypensieve deliberate` | Trigger council mode |
 | `mypensieve agent add <name>` | Add an agent persona |
 | `mypensieve skill add <name>` | Add a skill |
-| `mypensieve extract` | Manually run memory extractor |
 
 ---
 
@@ -245,7 +296,23 @@ rules:
 5. Add your Telegram user ID to `config.channels.telegram.allowed_peers`
 6. Enable the channel: `config.channels.telegram.enabled = true`
 
-Only whitelisted peers can use the bot. Empty `allowed_peers` = reject everyone.
+Only whitelisted peers can use the bot. Empty `allowed_peers` = reject everyone. Group chats are disabled by default; enabling them still enforces per-peer confirmation scoping (see v0.3.0 security notes above).
+
+---
+
+## Security posture
+
+MyPensieve runs autonomously and talks to LLMs, so the threat surface is meaningful. The v0.3.0 defenses:
+
+| Layer | Mechanism |
+|-------|-----------|
+| **Filesystem reads** | Deny-list (`/etc/shadow`, `~/.ssh/`, `.env*`, `*.pem`, etc.) enforced in Pi's `beforeToolCall` |
+| **Filesystem writes** | Allow-list (`~/.mypensieve/`, cwd, `/tmp/`) enforced in `beforeToolCall` AND at the verb level for `produce.output_path` |
+| **Bash commands** | Deny patterns for `sudo`, `rm -rf`, `chmod 777`, pipe-to-shell, `eval`, interpreter escapes |
+| **Destructive dispatches** | Blocked until operator approval (`dispatch` verb). Default daemon policy is `deny` when no interactive confirm provider is present. |
+| **Telegram peer scope** | Confirm prompts are bound to the requesting peer's Telegram user ID |
+| **Audit log** | Every verb call recorded to `~/.mypensieve/logs/audit/` with success/fail status including operator-denied |
+| **Secrets isolation** | Config-privacy rule prevents agent from reading `~/.mypensieve/.secrets/`; API keys never included in error contexts |
 
 ---
 
@@ -254,28 +321,23 @@ Only whitelisted peers can use the bot. Empty `allowed_peers` = reject everyone.
 ```
 src/
   config/         Config schema, reader, writer, paths
-  core/           Pi session wrapper, extension entry point
-  gateway/        8-verb gateway, routing, dispatcher, audit
-  memory/         5-layer memory, SQLite index, checkpoint
-  skills/         9 skill implementations, executor, registry
+  core/           Pi session wrapper, extension, scheduler, session-meta, persona-loadouts
+  gateway/        8-verb gateway, dispatcher, confirm-providers, audit, routing
+  memory/         5-layer memory + extractor + synthesizer + synthesizer-runner
+  providers/      Factory + 4 provider-complete shims (Ollama / Anthropic / OpenAI / OpenRouter)
+  skills/         Skill implementations, executor, registry
   ops/            Error handling, backup, cost tracking
   council/        Multi-agent deliberation, personas
-  channels/       CLI + Telegram adapters
-  wizard/         9-step install wizard
-  cli/            Command router, doctor, errors
-  init/           Directory scaffold
-  utils/          JSONL utilities
-  projects/       Project loader
+  channels/       CLI + Telegram adapters (both with gateway + confirm wiring)
+  wizard/         Install wizard (clack-based)
+  cli/            Command router + subcommands (persona, synthesize, doctor, errors, ...)
+  init/           Directory scaffold, extension bridge installer
 
 tests/
-  unit/           20 suites
-  integration/    5 suites (cross-phase)
-  e2e/            1 suite (full product scenarios)
-  304 tests total, all passing
-
-docs/
-  architecture/   Locked architecture decisions + implementation plan
-  drafts/         v2 feature specs (Patronus, etc.)
+  unit/           30+ suites covering dispatcher, confirm, loadouts, synthesizer, providers, extension
+  integration/    Cross-phase suites
+  e2e/            Full-product scenarios
+  579 tests total, all passing
 ```
 
 ---
@@ -302,7 +364,7 @@ MyPensieve borrows selectively from many sources. Credit where it's due:
 
 | Project | What we learned | Link |
 |---------|----------------|------|
-| **Pi** (`@mariozechner/pi-coding-agent`) | The runtime foundation. Agent loop, providers, sessions, skills, extensions. MyPensieve is built on Pi. | [github.com/badlogic/pi-mono](https://github.com/badlogic/pi-mono) |
+| **Pi** (`@mariozechner/pi-coding-agent`) | The runtime foundation. Agent loop, providers, sessions, skills, extensions. | [github.com/badlogic/pi-mono](https://github.com/badlogic/pi-mono) |
 | **mempalace** | Bitemporal triple-store schema, layered memory loader, source-lineage on records | [github.com/milla-jovovich/mempalace](https://github.com/milla-jovovich/mempalace) |
 | **OpenClaw** | Per-peer channel session scope, decoupled embedding model idea | [github.com/openclaw/openclaw](https://github.com/openclaw/openclaw) |
 | **AutoGen** | Council architecture - GroupChat, speaker selection, max_round | [github.com/microsoft/autogen](https://github.com/microsoft/autogen) |
@@ -313,43 +375,48 @@ MyPensieve borrows selectively from many sources. Credit where it's due:
 
 ### Special thanks
 
-- **Mario Zechner** ([@badlogic](https://github.com/badlogic)) for Pi - the foundation that made MyPensieve possible in a single day of implementation
+- **Mario Zechner** ([@badlogic](https://github.com/badlogic)) for Pi - the foundation that made MyPensieve possible
 - The **Cognition** team for the hard-won lesson that multi-agent fragments context
 
 ---
 
 ## Contributing
 
-MyPensieve is currently in **closed development** through v2. No external contributions are accepted at this time.
+MyPensieve is currently in **closed development** through v1. No external contributions are accepted at this time.
 
 If you find a bug or have a feature suggestion:
 - Open an issue on the [Issues page](https://github.com/HunterSreeni/MyPensieve/issues)
 - Include steps to reproduce, expected behavior, and actual behavior
 - For feature requests, explain the use case
 
-Contributions will open after v2 ships. Watch the repo for updates.
+Contributions will open after v1 ships. Watch the repo for updates.
 
 ---
 
 ## Roadmap
 
-### v0.1.0 (current)
-- 10-phase MVP framework complete
-- 26 test suites, 304 tests passing
-- Pending: Pi re-audit (April 13, 2026) for full interactive mode
+### v0.3.0 (current)
+- Autonomous echoes (daily-log, extractor, backup)
+- Operator-in-the-loop confirmations (CLI + Telegram inline buttons)
+- Persona loadouts
+- Multi-provider memory extraction + synthesizer pipeline
+- Full gateway wiring in Telegram channel
+
+### v0.4.0 (planned)
+- MCP re-architecture and unified MCP executor
+- Skills re-architecture (declarative schema, hot-reload)
+- Memory semantic layer (L4) with embeddings enabled by default
+- Discord channel adapter
 
 ### v1.0.0 (planned)
-- Full Pi interactive mode integration
-- Real MCP connections (DuckDuckGo, Playwright, whisper, gh-cli)
-- Install wizard with interactive prompts
+- Backup encryption at rest
+- Per-channel embedded extractor modes
+- Open external contributions
 
 ### v2.0.0 (planned)
 - [Patronus](docs/drafts/PATRONUS.md) - the friend agent that defends against despair
-- Discord channel adapter
 - Skill self-creation (auto-detect repeated manual tasks)
 - Loop A/B prompt evolution and routing optimization
-- Backup encryption at rest
-- Open contributions
 
 ---
 

@@ -3,10 +3,17 @@ import path from "node:path";
 import { DIRS } from "../config/paths.js";
 import { parseModelString, resolveDefaultModel } from "../config/schema.js";
 import type { Config } from "../config/schema.js";
+import { readSessionMeta } from "../core/session-meta.js";
 import { getProjectBinding } from "../core/session.js";
+
+/**
+ * Channels the extractor knows about. Used to detect "new channel first
+ * appears" so we don't drop its older sessions when computing the since-bound.
+ */
+const KNOWN_CHANNELS = ["cli", "telegram"] as const;
 import { captureError } from "../ops/index.js";
 import { type ProjectState, closeProject, loadProject } from "../projects/loader.js";
-import { ollamaComplete } from "../providers/ollama-complete.js";
+import { buildCompleteFn } from "../providers/complete-factory.js";
 import { CheckpointManager } from "./checkpoint.js";
 import { type NormalizedSession, listSessionFiles, normalizeSession } from "./session-reader.js";
 import type { ExtractionResult, ExtractorCheckpoint } from "./types.js";
@@ -38,7 +45,7 @@ export interface RunExtractionOptions {
 	dryRun?: boolean;
 	/** When true, write detailed progress to stdout. */
 	verbose?: boolean;
-	/** Inject a custom completion function. Defaults to ollamaComplete. */
+	/** Inject a custom completion function. Defaults to provider-routed shim via buildCompleteFn. */
 	complete?: CompleteFn;
 }
 
@@ -86,23 +93,11 @@ export async function runExtraction(opts: RunExtractionOptions = {}): Promise<Ru
 		throw new Error("runExtraction: no model provided. Pass `config` or `model`.");
 	}
 	const { provider, modelId } = parseModelString(model);
-	if (provider !== "ollama" && !opts.complete) {
-		throw new Error(
-			`runExtraction: provider '${provider}' is not yet supported by the extractor. Only 'ollama' is wired in v0.1.x. Pass an explicit \`complete\` function to override.`,
-		);
-	}
 
-	const complete: CompleteFn =
-		opts.complete ??
-		(async (a) => {
-			const r = await ollamaComplete({
-				model: a.model,
-				system: a.system,
-				prompt: a.prompt,
-				json: true,
-			});
-			return { ok: r.ok, text: r.text, error: r.error };
-		});
+	// Build the one-shot completion function for the active provider.
+	// Tests inject their own `opts.complete`; production uses the factory which
+	// dispatches to Ollama/Anthropic/OpenAI/OpenRouter based on the provider name.
+	const complete: CompleteFn = opts.complete ?? buildCompleteFn(provider);
 
 	const result: RunExtractionResult = {
 		processedSessions: 0,
@@ -141,13 +136,41 @@ export async function runExtraction(opts: RunExtractionOptions = {}): Promise<Ru
 	}
 
 	try {
-		// Determine `since` boundary: explicit > checkpoint > none.
+		if (opts.resetCheckpoint) {
+			resetAnchorCheckpoint(opts.projectsDir);
+			resetPerChannelAnchors(opts.projectsDir);
+		}
+
+		// Determine `since` boundary: explicit > min(per-channel checkpoints)
+		// across all known channels > legacy anchor > none.
+		//
+		// Correctness: if any KNOWN_CHANNEL has no anchor yet (fresh install,
+		// newly-enabled channel, restored backup), we cannot safely trust the
+		// min() of the channels we HAVE seen - a new channel's sessions may be
+		// older than any existing anchor. Seed missing channels from the legacy
+		// anchor (or leave unset to scan from the beginning) so no session is
+		// dropped when a channel first appears.
 		let since = opts.since;
+		const channelAnchors = opts.resetCheckpoint
+			? ({} as Record<string, ExtractorCheckpoint>)
+			: readPerChannelAnchors(opts.projectsDir);
 		if (!since && !opts.resetCheckpoint) {
-			// Use a single anchor checkpoint at the projects-dir root so we don't
-			// re-process the same Pi session for every binding.
-			const anchor = getAnchorCheckpoint(opts.projectsDir);
-			if (anchor && !opts.resetCheckpoint) since = anchor.last_processed_timestamp;
+			const missingKnown = KNOWN_CHANNELS.filter((c) => !channelAnchors[c]);
+			if (missingKnown.length === 0) {
+				// Every known channel has an anchor - safe to use min().
+				const timestamps = Object.values(channelAnchors)
+					.map((c) => c.last_processed_timestamp)
+					.filter((t): t is string => !!t)
+					.sort();
+				if (timestamps.length > 0) since = timestamps[0];
+			} else {
+				// At least one channel has no anchor. Fall back to the legacy
+				// anchor if present, else scan from the beginning. This ensures
+				// the newly-appearing channel's older sessions are still listed;
+				// the per-session skip below filters duplicates cheaply.
+				const anchor = getAnchorCheckpoint(opts.projectsDir);
+				if (anchor) since = anchor.last_processed_timestamp;
+			}
 		}
 
 		const files = listSessionFiles(since, opts.sessionsDir);
@@ -159,6 +182,12 @@ export async function runExtraction(opts: RunExtractionOptions = {}): Promise<Ru
 
 		let lastTimestamp = since ?? "";
 		let lastSessionId = "";
+		// Per-channel accumulators: track the newest session timestamp we processed
+		// per channel so we can advance each channel's anchor independently at the end.
+		const perChannelProgress: Record<
+			string,
+			{ lastTimestamp: string; lastSessionId: string; count: number }
+		> = {};
 
 		for (const file of files) {
 			const session = normalizeSession(file);
@@ -167,8 +196,26 @@ export async function runExtraction(opts: RunExtractionOptions = {}): Promise<Ru
 				continue;
 			}
 
-			const binding = getProjectBinding("cli", session.cwd || "unknown");
+			// Derive channel from the session-meta marker written by the extension
+			// at first agent start. Sessions predating the marker default to "cli".
+			const meta = readSessionMeta(session.sessionId);
+			const sessionChannel = meta?.channel_type ?? "cli";
+			const binding = getProjectBinding(sessionChannel, session.cwd || "unknown");
 			const projectName = binding;
+
+			// Per-channel idempotency: skip sessions this channel has already processed.
+			// Use strict `<` with session-id tiebreak so two distinct sessions sharing
+			// the same startedAt timestamp aren't both dropped on the second run.
+			const channelAnchor = channelAnchors[sessionChannel];
+			if (
+				channelAnchor &&
+				(session.startedAt < channelAnchor.last_processed_timestamp ||
+					(session.startedAt === channelAnchor.last_processed_timestamp &&
+						session.sessionId <= channelAnchor.last_processed_session_id))
+			) {
+				result.skippedSessions++;
+				continue;
+			}
 
 			let extracted: ExtractionResult;
 			try {
@@ -204,8 +251,33 @@ export async function runExtraction(opts: RunExtractionOptions = {}): Promise<Ru
 			}
 
 			result.processedSessions++;
-			lastTimestamp = session.startedAt;
-			lastSessionId = session.sessionId;
+			// Track legacy anchor's max-of (timestamp, sessionId) so two
+			// same-timestamp sessions are both reflected on the next run.
+			if (
+				session.startedAt > lastTimestamp ||
+				(session.startedAt === lastTimestamp && session.sessionId > lastSessionId)
+			) {
+				lastTimestamp = session.startedAt;
+				lastSessionId = session.sessionId;
+			}
+
+			// Track progress for this channel so we can write a per-channel anchor.
+			// Use max-of (timestamp, sessionId) so same-timestamp siblings are
+			// remembered correctly and the next run's tiebreak skips them.
+			const prog = perChannelProgress[sessionChannel];
+			const advances =
+				!prog ||
+				session.startedAt > prog.lastTimestamp ||
+				(session.startedAt === prog.lastTimestamp && session.sessionId > prog.lastSessionId);
+			if (advances) {
+				perChannelProgress[sessionChannel] = {
+					lastTimestamp: session.startedAt,
+					lastSessionId: session.sessionId,
+					count: (prog?.count ?? 0) + 1,
+				};
+			} else if (prog) {
+				prog.count += 1;
+			}
 
 			if (opts.verbose) {
 				console.log(
@@ -214,8 +286,9 @@ export async function runExtraction(opts: RunExtractionOptions = {}): Promise<Ru
 			}
 		}
 
-		// Advance the anchor checkpoint when we made progress and aren't dry-running.
+		// Advance anchors when we made progress and aren't dry-running.
 		if (!opts.dryRun && result.processedSessions > 0) {
+			// Legacy single anchor (kept for back-compat with older code paths).
 			writeAnchorCheckpoint(
 				{
 					last_processed_session_id: lastSessionId,
@@ -226,6 +299,20 @@ export async function runExtraction(opts: RunExtractionOptions = {}): Promise<Ru
 				},
 				opts.projectsDir,
 			);
+
+			// Per-channel anchors: advance each channel that saw progress.
+			const updated = { ...channelAnchors };
+			for (const [channel, prog] of Object.entries(perChannelProgress)) {
+				updated[channel] = {
+					last_processed_session_id: prog.lastSessionId,
+					last_processed_timestamp: prog.lastTimestamp,
+					total_sessions_processed:
+						(channelAnchors[channel]?.total_sessions_processed ?? 0) + prog.count,
+					last_run_status: result.failures.length === 0 ? "success" : "partial",
+					last_run_error: result.failures[0]?.error,
+				};
+			}
+			writePerChannelAnchors(updated, opts.projectsDir);
 		}
 	} finally {
 		for (const p of projectCache.values()) closeProject(p);
@@ -491,4 +578,43 @@ export function writeAnchorCheckpoint(checkpoint: ExtractorCheckpoint, projectsD
 
 export function resetAnchorCheckpoint(projectsDir?: string): void {
 	new CheckpointManager(anchorPath(projectsDir)).reset();
+}
+
+// --- Per-channel anchors (v0.3.0+) -------------------------------------------
+
+function perChannelAnchorsPath(projectsDir?: string): string {
+	const base = projectsDir ?? DIRS.projects;
+	return path.join(base, ".extractor-anchors.json");
+}
+
+/**
+ * Read the per-channel anchor map. Returns {} when the file is absent or
+ * unreadable - callers treat that as "no checkpoints yet, start from scratch".
+ */
+export function readPerChannelAnchors(projectsDir?: string): Record<string, ExtractorCheckpoint> {
+	const p = perChannelAnchorsPath(projectsDir);
+	if (!fs.existsSync(p)) return {};
+	try {
+		return JSON.parse(fs.readFileSync(p, "utf-8")) as Record<string, ExtractorCheckpoint>;
+	} catch {
+		return {};
+	}
+}
+
+/** Write the per-channel anchor map atomically. */
+export function writePerChannelAnchors(
+	anchors: Record<string, ExtractorCheckpoint>,
+	projectsDir?: string,
+): void {
+	const p = perChannelAnchorsPath(projectsDir);
+	fs.mkdirSync(path.dirname(p), { recursive: true });
+	const tmp = `${p}.tmp`;
+	fs.writeFileSync(tmp, `${JSON.stringify(anchors, null, 2)}\n`, "utf-8");
+	fs.renameSync(tmp, p);
+}
+
+/** Reset the per-channel anchors (used by --all / resetCheckpoint). */
+export function resetPerChannelAnchors(projectsDir?: string): void {
+	const p = perChannelAnchorsPath(projectsDir);
+	if (fs.existsSync(p)) fs.unlinkSync(p);
 }

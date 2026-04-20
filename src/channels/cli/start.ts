@@ -11,6 +11,7 @@ import { ConfigReadError, readConfig } from "../../config/index.js";
 import { PI_DIRS } from "../../config/paths.js";
 import { parseModelString, resolveDefaultModel } from "../../config/schema.js";
 import { createToolGuard } from "../../core/security/tool-guard.js";
+import { writeSessionMeta } from "../../core/session-meta.js";
 import { savePersonaTool } from "../../core/tools/persona-tool.js";
 import { validateChannelBinding } from "../../gateway/binding-validator.js";
 import { isPersonaTemplate } from "../../init/persona-templates.js";
@@ -261,6 +262,22 @@ export async function startCliSession(opts?: { configPath?: string }): Promise<v
 
 	// Install filesystem security guardrails
 	runtime.session.agent.beforeToolCall = createToolGuard(cwd);
+
+	// Stamp session-meta so the extractor can attribute this session to the
+	// CLI channel. Best-effort - extractor falls back to "cli" anyway, so this
+	// mainly future-proofs us against the default ever changing.
+	try {
+		const sid = sessionManager.getSessionId();
+		if (sid) {
+			writeSessionMeta({
+				session_id: sid,
+				channel_type: "cli",
+				timestamp: new Date().toISOString(),
+			});
+		}
+	} catch {
+		// Non-critical
+	}
 
 	const hostInfo = provider === "ollama" ? ` via ${getOllamaHost()}` : "";
 	console.log(`[mypensieve] Model: ${modelString}${hostInfo}`);

@@ -4,6 +4,8 @@ import { VERSION } from "../../version.js";
 import { registerCommand } from "../router.js";
 import { runDoctor } from "./doctor.js";
 import { runErrors } from "./errors.js";
+import "./persona.js";
+import "./synthesize.js";
 
 // --- Functional commands (Phase 4) ---
 

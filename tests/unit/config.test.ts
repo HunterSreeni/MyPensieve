@@ -42,7 +42,8 @@ function validConfig(): Config {
 				allow_groups: false,
 			},
 		},
-		extractor: { cron: "0 2 * * *" },
+		extractor: { cron: "0 2 * * *", synthesize_after: true },
+		security: { daemon_confirm_policy: "deny" },
 	};
 }
 

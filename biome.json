@@ -1,42 +1,42 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
-  "organizeImports": {
-    "enabled": true
-  },
-  "linter": {
-    "enabled": true,
-    "rules": {
-      "recommended": true,
-      "complexity": {
-        "noExcessiveCognitiveComplexity": "warn"
-      },
-      "suspicious": {
-        "noExplicitAny": "warn"
-      }
-    }
-  },
-  "formatter": {
-    "enabled": true,
-    "indentStyle": "tab",
-    "lineWidth": 100
-  },
-  "files": {
-    "include": ["src/**/*.ts", "tests/**/*.ts"],
-    "ignore": ["node_modules", "dist"]
-  },
-  "overrides": [
-    {
-      "include": ["tests/**/*.ts"],
-      "linter": {
-        "rules": {
-          "style": {
-            "noNonNullAssertion": "off"
-          },
-          "complexity": {
-            "noForEach": "off"
-          }
-        }
-      }
-    }
-  ]
+	"$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
+	"organizeImports": {
+		"enabled": true
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"complexity": {
+				"noExcessiveCognitiveComplexity": "warn"
+			},
+			"suspicious": {
+				"noExplicitAny": "warn"
+			}
+		}
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"lineWidth": 100
+	},
+	"files": {
+		"include": ["src/**/*.ts", "tests/**/*.ts"],
+		"ignore": ["node_modules", "dist"]
+	},
+	"overrides": [
+		{
+			"include": ["tests/**/*.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noNonNullAssertion": "off"
+					},
+					"complexity": {
+						"noForEach": "off"
+					}
+				}
+			}
+		}
+	]
 }

@@ -306,10 +306,40 @@ describe("runExtraction (with mocked LLM)", () => {
 		expect(result.failures[0]?.error).toContain("boom");
 	});
 
-	it("rejects unsupported providers without an injected complete fn", async () => {
+	it("rejects unknown providers without an injected complete fn", async () => {
 		await expect(
-			runExtraction({ model: "openrouter/some-model", sessionsDir, projectsDir }),
-		).rejects.toThrow(/openrouter/i);
+			runExtraction({ model: "made-up-provider/some-model", sessionsDir, projectsDir }),
+		).rejects.toThrow(/made-up-provider/i);
+	});
+
+	it("writes per-channel anchors and skips sessions already processed by that channel", async () => {
+		writeSampleSession(sessionsDir, {
+			id: "sess-pc-1",
+			tsIso: "2026-04-12T05:38:19.188Z",
+			tsFile: "2026-04-12T05-38-19-188Z",
+		});
+
+		await runExtraction({
+			model: "ollama/test-model",
+			sessionsDir,
+			projectsDir,
+			complete: fakeComplete,
+		});
+
+		const anchorsPath = path.join(projectsDir, ".extractor-anchors.json");
+		expect(fs.existsSync(anchorsPath)).toBe(true);
+		const anchors = JSON.parse(fs.readFileSync(anchorsPath, "utf-8"));
+		// Session has no session-meta marker so it defaults to "cli"
+		expect(anchors.cli.last_processed_session_id).toBe("sess-pc-1");
+
+		// Second run: the "cli" channel's anchor blocks re-processing
+		const second = await runExtraction({
+			model: "ollama/test-model",
+			sessionsDir,
+			projectsDir,
+			complete: fakeComplete,
+		});
+		expect(second.processedSessions).toBe(0);
 	});
 
 	it("requires a model", async () => {

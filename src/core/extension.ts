@@ -59,6 +59,11 @@ export function createMyPensieveExtension(overrides?: {
 		const channelType = overrides?.channelType ?? "cli";
 
 		// --- Session Start ---
+		// NOTE: session-meta (channel attribution) is written by the channel
+		// itself (src/channels/cli/start.ts and src/channels/telegram/start.ts)
+		// because only the channel knows the correct channel_type and peer_id.
+		// The shared extension has no reliable way to distinguish CLI vs
+		// Telegram sessions when loaded via Pi's auto-discovered bridge.
 		pi.on("session_start", (_event: SessionStartEvent) => {
 			try {
 				config = readConfig(overrides?.configPath);

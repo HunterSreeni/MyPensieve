@@ -3,7 +3,12 @@ import { type Static, Type } from "@sinclair/typebox";
 
 import { readConfig } from "../config/reader.js";
 import { isEscapeHatchAllowed } from "./binding-validator.js";
-import { type DispatchContext, GatewayDispatcher, type SkillExecutor } from "./dispatcher.js";
+import {
+	type ConfirmProvider,
+	type DispatchContext,
+	GatewayDispatcher,
+	type SkillExecutor,
+} from "./dispatcher.js";
 import { loadAllRoutingTables } from "./routing-loader.js";
 import { VERB_NAMES, type VerbName } from "./verbs.js";
 
@@ -106,13 +111,18 @@ export function createGatewayExtension(options: {
 	channelType: "cli" | "telegram";
 	project: string;
 	executor: SkillExecutor;
+	confirmProvider?: ConfirmProvider;
 	configPath?: string;
 	metaSkillsDir?: string;
 }): ExtensionFactory {
 	return (pi: ExtensionAPI) => {
 		pi.on("session_start", () => {
 			const routingTables = loadAllRoutingTables(options.metaSkillsDir);
-			const dispatcher = new GatewayDispatcher(routingTables, options.executor);
+			const dispatcher = new GatewayDispatcher(
+				routingTables,
+				options.executor,
+				options.confirmProvider,
+			);
 
 			const ctx: DispatchContext = {
 				channelType: options.channelType,

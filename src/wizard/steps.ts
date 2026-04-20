@@ -167,7 +167,8 @@ function buildConfig(state: { config: Record<string, unknown> }): Config {
 			include_secrets: false,
 		},
 		channels: state.config.channels as Config["channels"],
-		extractor: { cron: "0 2 * * *" },
+		extractor: { cron: "0 2 * * *", synthesize_after: true },
+		security: { daemon_confirm_policy: "deny" },
 	};
 }
 
