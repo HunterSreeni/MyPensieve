@@ -6,6 +6,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.3] - 2026-04-21
+
+Bug fix.
+
+### Fixed
+- **`mypensieve init` overwrote existing installs with no confirmation** (`src/cli/commands/index.ts`). Re-running init on a machine that already had `~/.mypensieve/config.json` silently replaced config, persona files, and could clobber secrets. Now init detects the existing config, prints what will be replaced, and blocks on a confirm prompt. Pass `--force` to skip the prompt (for automation).
+
+---
+
 ## [0.3.2] - 2026-04-21
 
 Bug fix.

@@ -152,11 +152,26 @@ registerCommand({
 registerCommand({
 	name: "init",
 	description: "Run the install wizard",
-	usage: "mypensieve init [--restart]",
+	usage: "mypensieve init [--restart] [--force]",
 	run: async (args) => {
+		const fs = await import("node:fs");
+		const { CONFIG_PATH } = await import("../../config/paths.js");
+		const restart = args.includes("--restart");
+		const force = args.includes("--force");
+
+		if (fs.existsSync(CONFIG_PATH) && !force) {
+			const { confirm } = await import("../../wizard/prompt.js");
+			console.log(`\nExisting config found at ${CONFIG_PATH}.`);
+			console.log("Continuing will overwrite config.json, persona files, and may replace secrets.");
+			const proceed = await confirm("Overwrite existing install?", false);
+			if (!proceed) {
+				console.log("Aborted. Pass --force to skip this prompt.");
+				return;
+			}
+		}
+
 		const { runWizard } = await import("../../wizard/framework.js");
 		const { createWizardSteps } = await import("../../wizard/steps.js");
-		const restart = args.includes("--restart");
 		await runWizard(createWizardSteps(), { restart });
 	},
 });
