@@ -6,6 +6,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.5] - 2026-04-21
+
+Defensive hardening + docs.
+
+### Security
+- **Systemd unit hardened** (`src/cli/commands/daemon.ts`). The generated `mypensieve.service` now includes `RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6` (blocks raw, packet, netlink, etc.), `LockPersonality=true`, `RestrictRealtime=true`, `RestrictSUIDSGID=true`. Existing installs should re-run `mypensieve daemon install` to pick up the new unit file.
+
+### Docs
+- **Added a Network Exposure section** to `docs/KNOWN-LIMITATIONS.md` confirming MyPensieve opens zero inbound listeners, and calling out that pointing `OLLAMA_HOST` at `0.0.0.0` on a LAN-reachable machine is an operator-level foot-gun (not a MyPensieve bug).
+
+---
+
 ## [0.3.4] - 2026-04-21
 
 Bug fix / gap fix.

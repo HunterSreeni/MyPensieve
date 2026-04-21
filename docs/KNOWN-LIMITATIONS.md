@@ -1,5 +1,5 @@
 # MyPensieve - Known Limitations
-> Last updated: 2026-04-21 (v0.3.4)
+> Last updated: 2026-04-21 (v0.3.5)
 
 These are honest disclaimers about what works, what doesn't, and what to expect.
 
@@ -43,6 +43,12 @@ These are honest disclaimers about what works, what doesn't, and what to expect.
 - No push notifications when bot is offline
 - Group messages blocked by default (security - prevents token burn from strangers)
 - Available commands: `/start`, `/reset`, `/status`, `/help`
+
+## Network Exposure
+
+- **MyPensieve does NOT open any inbound listener.** No HTTP server, no webhook endpoint, no RPC port. The Telegram bot uses long-polling (outbound), providers are outbound HTTPS clients, and MCP servers run as stdio subprocesses. Nothing on the machine accepts network connections on MyPensieve's behalf.
+- **Do not point `OLLAMA_HOST` at `0.0.0.0` on a multi-user or LAN-reachable machine.** The default `http://127.0.0.1:11434` keeps Ollama on loopback. Binding Ollama to `0.0.0.0` exposes the local model server to every host on the network without auth - not a MyPensieve bug, but a foot-gun because MyPensieve will talk to whatever host you configure.
+- **systemd unit runs as the invoking user**, not root. `mypensieve daemon install` writes to `~/.config/systemd/user/`, no sudo required. Hardening in the unit: `NoNewPrivileges`, `ProtectSystem=strict`, `ReadWritePaths=~/.mypensieve`, `ReadOnlyPaths=~/`, `PrivateTmp`, `RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6` (v0.3.5+), `LockPersonality`, `RestrictRealtime`, `RestrictSUIDSGID`.
 
 ## Security Guardrails (hardened in v0.1.6-v0.1.10)
 
