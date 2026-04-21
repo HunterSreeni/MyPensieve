@@ -1,9 +1,13 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import { CONFIG_PATH, DIRS } from "../../config/paths.js";
+import os from "node:os";
+import path from "node:path";
+import { CONFIG_PATH, DIRS, SECRETS_DIR } from "../../config/paths.js";
 import { ConfigReadError, readConfig } from "../../config/reader.js";
 import { parseModelString, resolveDefaultModel } from "../../config/schema.js";
 import { verifyDirectories } from "../../init/directories.js";
 import { getOllamaHost, probeOllama } from "../../providers/ollama.js";
+import { hasProviderApiKey } from "../../providers/secrets.js";
 import { VERSION } from "../../version.js";
 
 interface DoctorCheck {
@@ -209,6 +213,123 @@ async function checkOllama(): Promise<DoctorCheck[]> {
 	}
 }
 
+function checkProviderKeys(): DoctorCheck[] {
+	let config: ReturnType<typeof readConfig>;
+	try {
+		config = readConfig();
+	} catch {
+		return [];
+	}
+	const providers = new Set<string>();
+	const collect = (modelString?: string) => {
+		if (!modelString) return;
+		try {
+			providers.add(parseModelString(modelString).provider);
+		} catch {
+			// Ignore malformed model strings here - checkConfig reports config errors.
+		}
+	};
+	collect(config.default_model);
+	collect(config.tier_routing?.default);
+	for (const m of Object.values(config.agent_models ?? {})) collect(m);
+
+	const results: DoctorCheck[] = [];
+	for (const provider of providers) {
+		if (provider === "ollama") continue; // ollama uses no API key file
+		if (hasProviderApiKey(provider)) {
+			results.push({
+				name: `Provider key (${provider})`,
+				status: "ok",
+				message: `Found at ${SECRETS_DIR}/${provider}.json`,
+			});
+		} else {
+			results.push({
+				name: `Provider key (${provider})`,
+				status: "fail",
+				message: `Missing ${SECRETS_DIR}/${provider}.json. Model references ${provider} but no key is configured.`,
+			});
+		}
+	}
+	return results;
+}
+
+function checkTelegram(): DoctorCheck[] {
+	let config: ReturnType<typeof readConfig>;
+	try {
+		config = readConfig();
+	} catch {
+		return [];
+	}
+	if (!config.channels.telegram.enabled) {
+		return [{ name: "Telegram", status: "ok", message: "Channel disabled (skipped)" }];
+	}
+
+	const tokenPath = path.join(SECRETS_DIR, "telegram.json");
+	if (!fs.existsSync(tokenPath)) {
+		return [
+			{
+				name: "Telegram",
+				status: "fail",
+				message: `Channel enabled but bot token is missing at ${tokenPath}`,
+			},
+		];
+	}
+
+	const peers = config.channels.telegram.allowed_peers;
+	if (!peers || peers.length === 0) {
+		return [
+			{
+				name: "Telegram",
+				status: "fail",
+				message:
+					"Channel enabled but allowed_peers is empty. Bot would reject every message. Add your numeric Telegram user ID to config.json.",
+			},
+		];
+	}
+
+	return [
+		{
+			name: "Telegram",
+			status: "ok",
+			message: `Enabled, ${peers.length} peer${peers.length === 1 ? "" : "s"} whitelisted`,
+		},
+	];
+}
+
+function checkDaemonService(): DoctorCheck {
+	if (os.platform() !== "linux") {
+		return { name: "Daemon service", status: "ok", message: "Skipped (non-Linux)" };
+	}
+	const unitPath = path.join(os.homedir(), ".config", "systemd", "user", "mypensieve.service");
+	if (!fs.existsSync(unitPath)) {
+		return {
+			name: "Daemon service",
+			status: "warn",
+			message: "Not installed. Run 'mypensieve daemon install' to run MyPensieve unattended.",
+		};
+	}
+	try {
+		const out = execFileSync("systemctl", ["--user", "is-active", "mypensieve.service"], {
+			encoding: "utf-8",
+			stdio: ["ignore", "pipe", "ignore"],
+		}).trim();
+		if (out === "active") {
+			return { name: "Daemon service", status: "ok", message: "Installed and active" };
+		}
+		return {
+			name: "Daemon service",
+			status: "warn",
+			message: `Installed but ${out}. Run: systemctl --user start mypensieve.service`,
+		};
+	} catch {
+		return {
+			name: "Daemon service",
+			status: "warn",
+			message: "Installed but inactive. Run: systemctl --user start mypensieve.service",
+		};
+	}
+}
+
 /**
  * Run healthcheck against all MyPensieve components.
  * Reports issues and suggestions.
@@ -218,6 +339,9 @@ export async function runDoctor(): Promise<void> {
 
 	checks.push(checkConfig());
 	checks.push(...checkDirectories());
+	checks.push(...checkProviderKeys());
+	checks.push(...checkTelegram());
+	checks.push(checkDaemonService());
 	checks.push(checkBackup());
 	checks.push(checkErrors());
 	checks.push(await checkVersion());

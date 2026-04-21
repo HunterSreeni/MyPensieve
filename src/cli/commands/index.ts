@@ -86,19 +86,22 @@ registerCommand({
 
 registerCommand({
 	name: "status",
-	description: "Show version, model, and config summary",
-	usage: "mypensieve status",
-	run: async (_args) => {
+	description: "Show a config summary plus any unattended items (runs the doctor)",
+	usage: "mypensieve status [--brief]",
+	run: async (args) => {
 		const { readConfig } = await import("../../config/index.js");
 		const { resolveDefaultModel } = await import("../../config/schema.js");
 		const { getOllamaHost } = await import("../../providers/ollama.js");
+		const brief = args.includes("--brief");
 
 		console.log(`MyPensieve v${VERSION}\n`);
 
+		let hasConfig = false;
 		try {
 			const config = readConfig();
 			const model = resolveDefaultModel(config);
 			const host = getOllamaHost();
+			hasConfig = true;
 
 			console.log(`  Operator:    ${config.operator.name}`);
 			console.log(`  Timezone:    ${config.operator.timezone}`);
@@ -110,6 +113,10 @@ registerCommand({
 			console.log(`  Backup:      ${config.backup.enabled ? "enabled" : "disabled"}`);
 		} catch {
 			console.log("  No config found. Run 'mypensieve init' first.");
+		}
+
+		if (!brief && hasConfig) {
+			await runDoctor();
 		}
 	},
 });

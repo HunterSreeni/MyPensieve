@@ -6,6 +6,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.4] - 2026-04-21
+
+Bug fix / gap fix.
+
+### Fixed
+- **`mypensieve status` did not surface unattended setup gaps.** It only printed a version/model summary. The actual health check (`mypensieve doctor`) was a separate, less-discoverable command. `status` now prints the summary and then runs the doctor by default. Pass `--brief` to skip the health check.
+- **Doctor had blind spots** (`src/cli/commands/doctor.ts`):
+  - Provider API keys: doctor now checks that every non-Ollama provider referenced by `default_model` / `tier_routing` / `agent_models` has a corresponding secrets file.
+  - Telegram: fails if the channel is enabled but the bot token is missing or `allowed_peers` is empty (would reject every inbound message).
+  - Daemon service: reports whether `mypensieve.service` is installed and active on Linux.
+
+---
+
 ## [0.3.3] - 2026-04-21
 
 Bug fix.
