@@ -5,6 +5,10 @@ on:
     - cron: '0 8 * * 1'  # Every Monday 8am UTC (1:30 PM IST)
   workflow_dispatch:  # Manual trigger
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   check:
     name: Check for Pi updates
