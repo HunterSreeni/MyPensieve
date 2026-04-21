@@ -6,6 +6,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.2] - 2026-04-21
+
+Bug fix.
+
+### Fixed
+- **Wizard could leave Telegram enabled with an empty allowlist** (`src/wizard/steps.ts`). If the user enabled the Telegram channel but pressed Enter on the peer-ID prompt, the config was written with `channels.telegram.enabled: true` and `allowed_peers: []`. The daemon would start a bot that silently rejected every inbound message. Wizard now auto-disables the channel in that case and prints a one-liner recovery path (edit config, add peer, set enabled back to true).
+
+---
+
 ## [0.3.1] - 2026-04-21
 
 Bug fix.

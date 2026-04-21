@@ -249,7 +249,19 @@ async function setupTelegramChannel(state: { config: Record<string, unknown> }):
 			peerId,
 		];
 	} else {
-		note("No peer added. Bot will reject ALL messages until you add your ID.", "Warning");
+		// Empty allowlist with channel enabled would silently reject every inbound
+		// message. Disable the channel now so the daemon doesn't start a bot that
+		// ignores everyone. User can flip `channels.telegram.enabled` to true after
+		// adding a peer to config.json.
+		(
+			state.config.channels as { telegram: { enabled: boolean; allowed_peers: string[] } }
+		).telegram.enabled = false;
+		note(
+			"No peer added. Telegram channel DISABLED to avoid a bot that rejects every message.\n" +
+				"Add your numeric ID to `channels.telegram.allowed_peers` in ~/.mypensieve/config.json,\n" +
+				"then set `channels.telegram.enabled` to true.",
+			"Telegram disabled",
+		);
 	}
 
 	note(
