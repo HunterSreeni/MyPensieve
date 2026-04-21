@@ -6,6 +6,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.1] - 2026-04-21
+
+Bug fix.
+
+### Fixed
+- **Wizard API key validation logic was inverted** (`src/wizard/steps.ts`). The probe returned `true` for any non-401 HTTP response, so 403 (suspended key), 429 (quota), and other 4xx rejections were silently accepted as valid. Now only 2xx counts as valid; 4xx fails the check; 5xx and network errors are treated as transient and don't block the wizard.
+
+---
+
 ## [0.3.0] - 2026-04-20
 
 v0.3.0 - autonomous operations, operator-in-the-loop safety, persona loadouts, multi-provider memory pipeline, full gateway wiring in Telegram.

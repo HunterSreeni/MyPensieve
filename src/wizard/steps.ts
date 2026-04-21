@@ -113,15 +113,18 @@ async function setupApiKeyProvider(
 				headers,
 				signal: AbortSignal.timeout(5000),
 			});
-			return res.ok || res.status === 401 ? res.ok : true; // Non-401 errors are likely fine
+			if (res.ok) return true;
+			// 5xx = provider issue, treat as transient so we don't block the wizard.
+			if (res.status >= 500) return true;
+			return false; // 4xx (401 bad key, 403 suspended, 429 quota) - genuinely invalid.
 		} catch {
-			return true; // Network error - don't block wizard, user can fix later
+			return true; // Network error / timeout - don't block wizard, user can fix later
 		}
 	});
 
 	if (!valid) {
 		note(
-			"API key validation failed (401 Unauthorized).\nSaving anyway - you can update it later.",
+			"API key validation failed (rejected by provider).\nSaving anyway - you can update it later.",
 			"Warning",
 		);
 	}
