@@ -49,20 +49,23 @@ jobs:
 
           BODY_FILE=$(mktemp)
           {
-            printf 'A new version of @mariozechner/pi-coding-agent is available.\n\n'
-            printf 'Current: %s\n' "$CURRENT"
-            printf 'Latest:  %s\n\n' "$LATEST"
-            printf '## Before upgrading\n'
-            printf '1. Read the Pi changelog / release notes\n'
-            printf '2. Run `scripts/pi-reaudit.sh` against the new version\n'
-            printf '3. Check for breaking changes in the extension API\n'
-            printf '4. Test all channels (CLI + Telegram)\n'
-            printf '5. Update the pinned version in package.json\n\n'
-            printf '## Risk areas\n'
-            printf '- Extension event API (before_agent_start, tool_execution_start, etc.)\n'
-            printf '- AgentSession.prompt() behavior\n'
-            printf '- Tool definitions (codingTools interface)\n'
-            printf '- Model registry API\n'
+            printf '%s\n' "A new version of @mariozechner/pi-coding-agent is available."
+            printf '\n'
+            printf '%s\n' "Current: $CURRENT"
+            printf '%s\n' "Latest:  $LATEST"
+            printf '\n'
+            printf '%s\n' '## Before upgrading'
+            printf '%s\n' '1. Read the Pi changelog / release notes'
+            printf '%s\n' '2. Run `scripts/pi-reaudit.sh` against the new version'
+            printf '%s\n' '3. Check for breaking changes in the extension API'
+            printf '%s\n' '4. Test all channels (CLI + Telegram)'
+            printf '%s\n' '5. Update the pinned version in package.json'
+            printf '\n'
+            printf '%s\n' '## Risk areas'
+            printf '%s\n' '- Extension event API (before_agent_start, tool_execution_start, etc.)'
+            printf '%s\n' '- AgentSession.prompt() behavior'
+            printf '%s\n' '- Tool definitions (codingTools interface)'
+            printf '%s\n' '- Model registry API'
           } > "$BODY_FILE"
 
           gh issue create \
