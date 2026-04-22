@@ -6,6 +6,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.6] - 2026-04-22
+
+### Fixed
+- Fixed an issue where Ollama models registered in a loop would overwrite each other in the model registry. Models are now registered in a single batched call.
+
+---
+
 ## [0.3.5] - 2026-04-21
 
 Defensive hardening + docs.

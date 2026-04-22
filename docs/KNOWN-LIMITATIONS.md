@@ -1,5 +1,5 @@
 # MyPensieve - Known Limitations
-> Last updated: 2026-04-21 (v0.3.5)
+> Last updated: 2026-04-22 (v0.3.6)
 
 These are honest disclaimers about what works, what doesn't, and what to expect.
 
