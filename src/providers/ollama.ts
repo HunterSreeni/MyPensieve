@@ -94,7 +94,7 @@ export function filterEmbeddingModels(models: OllamaTagEntry[]): OllamaTagEntry[
 }
 
 /**
- * Register the Ollama provider with Pi's ModelRegistry using a single chosen model.
+ * Register the Ollama provider with Pi's ModelRegistry using the chosen models.
  *
  * The local Ollama daemon handles cloud auth transparently via `ollama signin`.
  * Ollama's OpenAI-compat endpoint requires an API key field but ignores its value,
@@ -107,35 +107,36 @@ export function filterEmbeddingModels(models: OllamaTagEntry[]): OllamaTagEntry[
  *
  * @param registry Pi's ModelRegistry instance
  * @param host Ollama daemon base URL (e.g. http://localhost:11434)
- * @param modelId Ollama model id (e.g. "nemotron-3-super:cloud")
+ * @param modelIds Ollama model ids (e.g. ["nemotron-3-super:cloud"])
  */
 export function registerOllamaProvider(
 	registry: ModelRegistry,
 	host: string,
-	modelId: string,
+	modelIds: string[],
 ): void {
+	// AI-DEV Note: This function now accepts an array of modelIds instead of a single
+	// modelId to support registering multiple models for the same provider at once.
+	// This prevents Pi's registerProvider from overwriting models in a loop.
 	registry.registerProvider("ollama", {
 		baseUrl: `${host}/v1`,
 		api: "openai-completions",
 		apiKey: "ollama",
 		authHeader: true,
-		models: [
-			{
-				id: modelId,
-				name: modelId,
-				api: "openai-completions",
-				reasoning: false,
-				input: ["text"],
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				contextWindow: 128_000,
-				maxTokens: 32_000,
-				compat: {
-					supportsStore: false,
-					supportsDeveloperRole: false,
-					maxTokensField: "max_tokens",
-				},
+		models: modelIds.map((modelId) => ({
+			id: modelId,
+			name: modelId,
+			api: "openai-completions",
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 128_000,
+			maxTokens: 32_000,
+			compat: {
+				supportsStore: false,
+				supportsDeveloperRole: false,
+				maxTokensField: "max_tokens",
 			},
-		],
+		})),
 	});
 }
 

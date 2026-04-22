@@ -24,10 +24,10 @@ export type SupportedProvider = (typeof SUPPORTED_PROVIDERS)[number];
 const REGISTRARS: Record<string, RegisterProviderFn> = {
 	ollama: ({ registry, modelIds }) => {
 		const host = getOllamaHost();
-		// Ollama registers one model at a time via its existing function
-		for (const modelId of modelIds) {
-			registerOllamaProvider(registry, host, modelId);
-		}
+		// AI-DEV Note: Register all Ollama models in a single batched call.
+		// Pi's registerProvider replaces all models, so looping over them
+		// one by one would overwrite the previously registered models.
+		registerOllamaProvider(registry, host, modelIds);
 	},
 	anthropic: registerAnthropicProvider,
 	openrouter: registerOpenRouterProvider,
