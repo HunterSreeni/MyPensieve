@@ -73,10 +73,13 @@ describe("Provider factory", () => {
 		it("registers multiple ollama models", () => {
 			const registry = createMockRegistry();
 			registerProviderWithModels("ollama", registry as any, ["model-a", "model-b"], "");
-			// Ollama registers one model per call
-			expect(registry.calls.length).toBe(2);
+			// Ollama batched registers all models in one call
+			expect(registry.calls.length).toBe(1);
 			expect(registry.calls[0].name).toBe("ollama");
-			expect(registry.calls[1].name).toBe("ollama");
+			const config = registry.calls[0].config as { models: Array<{ id: string }> };
+			expect(config.models.length).toBe(2);
+			expect(config.models[0].id).toBe("model-a");
+			expect(config.models[1].id).toBe("model-b");
 		});
 
 		it("throws for unknown provider", () => {
